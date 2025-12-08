@@ -1,0 +1,117 @@
+# OWASP GraphGuard Code Review Guidelines
+# AI-powered security analysis agent for Node.js applications
+
+areas:
+  observability:
+    description: "OpenTelemetry and Langfuse instrumentation patterns"
+    globs:
+      - "src/**"
+      - "index.ts"
+    rules:
+      - id: "instrumentation_import_first"
+        description: "instrumentation.ts MUST be imported as the FIRST statement in any entrypoint file. Other imports before it will break trace capture."
+        severity: "high"
+      - id: "missing_span_attributes"
+        description: "OpenTelemetry spans must include required attributes: scan.id, repo.path, owasp.category, finding.severity."
+        severity: "medium"
+      - id: "span_not_ended"
+        description: "All OpenTelemetry spans must call span.end() in a finally block to prevent trace leaks."
+        severity: "medium"
+
+  config_and_secrets:
+    description: "12-Factor config and secret management"
+    globs:
+      - "**"
+    rules:
+      - id: "hardcoded_api_keys"
+        description: "Never hardcode API keys, secrets, or credentials. Use process.env with Zod validation via src/config.ts."
+        severity: "high"
+      - id: "missing_env_validation"
+        description: "Environment variables must be validated with Zod schemas before use. Raw process.env access is prohibited outside config.ts."
+        severity: "high"
+      - id: "secrets_in_logs"
+        description: "Never log API keys, tokens, or sensitive data. Sanitize all log output."
+        severity: "high"
+
+  langgraph_patterns:
+    description: "LangGraph state management and node patterns"
+    globs:
+      - "src/graph/**"
+    rules:
+      - id: "state_mutation"
+        description: "LangGraph state is immutable. Nodes must return partial state updates via spread operators, never mutate state directly."
+        severity: "high"
+      - id: "node_return_type"
+        description: "LangGraph nodes must return Promise<Partial<SecurityAnalysisState>>, not void or the full state object."
+        severity: "medium"
+      - id: "missing_error_handling"
+        description: "LangGraph nodes must handle errors gracefully and return valid partial state even on failure."
+        severity: "medium"
+
+  tool_definitions:
+    description: "LangChain tool and Zod schema patterns"
+    globs:
+      - "src/tools/**"
+    rules:
+      - id: "missing_zod_schema"
+        description: "All LangChain tools must define input schemas using Zod. Untyped tools break agent reasoning."
+        severity: "high"
+      - id: "tool_description_quality"
+        description: "Tool descriptions must clearly explain purpose and parameters. Vague descriptions cause agent confusion."
+        severity: "medium"
+      - id: "tool_output_serialization"
+        description: "Tool functions must return JSON.stringify() serialized output, not raw objects."
+        severity: "medium"
+
+  auggie_integration:
+    description: "Auggie SDK integration patterns"
+    globs:
+      - "src/tools/**"
+      - "src/**"
+    rules:
+      - id: "auggie_workspace_root"
+        description: "Auggie client must be initialized with workspaceRoot from validated config, not hardcoded paths."
+        severity: "high"
+      - id: "auggie_error_handling"
+        description: "Auggie SDK calls must be wrapped in try-catch with proper span recording for observability."
+        severity: "medium"
+
+  typescript_esm:
+    description: "TypeScript ES module patterns for Bun runtime"
+    globs:
+      - "**/*.ts"
+    rules:
+      - id: "commonjs_require"
+        description: "Use ES module imports only. CommonJS require() is not compatible with Bun ES module configuration."
+        severity: "high"
+      - id: "missing_file_extension"
+        description: "Relative imports should use explicit .ts extensions for Bun compatibility."
+        severity: "low"
+
+  security_analysis_output:
+    description: "Security finding output format compliance"
+    globs:
+      - "src/graph/nodes/**"
+    rules:
+      - id: "finding_schema_compliance"
+        description: "Security findings must conform to SecurityFinding interface: category, title, severity, evidence, explanation, recommendedFix."
+        severity: "high"
+      - id: "owasp_category_format"
+        description: "OWASP categories must use official format: A01:2021-BrokenAccessControl, A03:2021-Injection, etc."
+        severity: "medium"
+      - id: "severity_values"
+        description: "Finding severity must be one of: critical, high, medium, low. No other values permitted."
+        severity: "medium"
+
+  testing:
+    description: "Test patterns and coverage"
+    globs:
+      - "**/*.test.ts"
+      - "**/*.spec.ts"
+    rules:
+      - id: "mock_external_services"
+        description: "Tests must mock Auggie SDK and LLM calls. Real API calls in tests cause flaky behavior and cost."
+        severity: "high"
+      - id: "trace_verification"
+        description: "Integration tests should verify OpenTelemetry spans are emitted with correct attributes."
+        severity: "medium"
