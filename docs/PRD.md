@@ -200,7 +200,17 @@ Each run should:
 
 ## 8. Implementation plan (high-level)
 
-### 8.1 Phase 1: Skeleton, Bun setup, observability wiring
+### Implementation Status
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | ✅ COMPLETE | Skeleton, Bun setup, observability wiring |
+| Phase 2 | ✅ COMPLETE | OpenTelemetry + Langfuse instrumentation |
+| Phase 3 | ✅ COMPLETE | LangGraph agent scaffold |
+| Phase 4 | 🔄 NEXT | Auggie + Tools + OWASP rules |
+| Phase 5 | ⏳ NOT STARTED | CLI & Testing with nodejs-goof |
+
+### 8.1 Phase 1: Skeleton, Bun setup, observability wiring ✅ COMPLETE
 
 - Initialize a Bun + TypeScript project:
   - Use Bun to create the project and manage dependencies (`bun init`, `bun add ...`).[web:6]
@@ -209,29 +219,54 @@ Each run should:
   - Add `@augmentcode/auggie-sdk` and local Auggie setup.[web:3]
 - Implement `instrumentation.ts` and import it first in the Bun entrypoint.[file:1][web:6]
 
-### 8.2 Phase 2: LangChain/LangGraph agent
+**Deliverables:**
+- `src/instrumentation.ts` - OpenTelemetry + Langfuse initialization
+- `src/config.ts` - Zod-based configuration validation
+- `.env.example` - Environment template
+- `.github/workflows/test.yml` - CI workflow
 
-- Implement a minimal LangChain agent:
-  - Model: configurable provider (e.g., Anthropic, OpenAI).
-  - Tools: wrappers around Auggie client operations for code search, file inspection, etc.[web:3][web:4]
-- Build a simple LangGraph `StateGraph` proof-of-concept:
-  - Input node (user query + OWASP mode).
-  - Single analysis node that calls the agent.
-  - Output node returning results.[web:5]
+### 8.2 Phase 2: Observability Wiring ✅ COMPLETE
 
-### 8.3 Phase 3: OWASP-specific logic
+- Full OpenTelemetry integration with Langfuse span processor
+- Configuration validation with Zod schemas
+- Test infrastructure with bun:test
+- 20 passing tests for config and instrumentation
+
+### 8.3 Phase 3: LangGraph Agent Scaffold ✅ COMPLETE
+
+- Build a LangGraph `StateGraph` with 5 nodes:
+  - `input` - Scan initialization with timing
+  - `enumerate` - Target discovery (placeholder for Auggie)
+  - `analyze` - Security analysis (placeholder for LLM)
+  - `aggregate` - Findings aggregation + markdown summary
+  - `output` - Scan finalization
+- `SecurityAnalysisStateAnnotation` with all 10 OWASP Top 10 2021 categories
+- `SecurityFinding` interface matching PRD Section 6.4
+- Full OpenTelemetry tracing for each node
+- 39 passing tests total
+
+**Deliverables:**
+- `src/graph/state.ts` - State types and OWASP categories
+- `src/graph/nodes/*.ts` - 5 node implementations
+- `src/graph/index.ts` - Graph assembly + `runSecurityAnalysis()`
+- `src/graph/*.test.ts` - Comprehensive test coverage
+
+### 8.4 Phase 4: Auggie + Tools + OWASP Rules 🔄 NEXT
 
 - Create OWASP rule prompts and rule markdown files (paraphrased, not copied) for each Top 10 2021 category.[web:2]
-- Implement per-category analysis nodes or a policy that iterates over categories.
-- Map raw agent findings into a normalized vulnerability data model.
+- Implement Auggie SDK wrapper tools for code search and file inspection.[web:3][web:4]
+- Wire LLM (Anthropic/OpenAI) to analysis node
+- Implement per-category analysis or single "all-OWASP" analysis node
+- Map raw agent findings into normalized vulnerability data model
 
-### 8.4 Phase 4: Hardening and testing with `nodejs-goof`
+### 8.5 Phase 5: CLI & Testing with `nodejs-goof`
 
 - Clone `nodejs-goof` and run multiple scans using Bun scripts.[web:1][web:6]
 - Validate that:
   - Common vulnerabilities are discovered and correctly categorized.
   - Langfuse traces show the full chain of reasoning.
 - Adjust prompts, tools, and LangGraph flow for better precision/recall.[web:5][file:1]
+- Create CLI with argument parsing (`bun run scan`)
 
 ---
 

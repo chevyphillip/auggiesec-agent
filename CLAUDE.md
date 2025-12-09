@@ -9,14 +9,14 @@ AI-powered security analysis agent for Node.js applications, aligned with OWASP 
 ## Implementation Status
 
 ```
-Phase 1: Skeleton Setup     [CURRENT] <<<
-Phase 2: Observability      [NOT STARTED]
-Phase 3: LangGraph Agent    [NOT STARTED]
-Phase 4: OWASP Analysis     [NOT STARTED]
+Phase 1: Skeleton Setup     [COMPLETE] ✓
+Phase 2: Observability      [COMPLETE] ✓
+Phase 3: LangGraph Agent    [COMPLETE] ✓
+Phase 4: OWASP Analysis     [NEXT] <<<
 Phase 5: CLI & Testing      [NOT STARTED]
 ```
 
-**Current state**: Project skeleton with dependencies declared but no implementation code.
+**Current state**: LangGraph agent scaffold complete with SecurityAnalysisState, 5 nodes (input, enumerate, analyze, aggregate, output), full OpenTelemetry tracing integration, and 39 passing tests.
 
 **Runtime**: Bun 1.x | TypeScript 5.x | ES Modules
 
@@ -29,18 +29,27 @@ Phase 5: CLI & Testing      [NOT STARTED]
 Commands that work TODAY:
 
 ```bash
-# Install declared dependencies
+# Install dependencies
 bun install
 
-# Run skeleton entrypoint (outputs "Hello via Bun!")
-bun run index.ts
+# Copy environment template and add your credentials
+cp .env.example .env
+# Edit .env with your Langfuse API keys
+
+# Run the entrypoint (requires valid .env)
+bun run dev
+
+# Run tests
+bun test
+
+# Type check
+bun run type-check
 ```
 
 Commands that DO NOT work yet:
 
 ```bash
-# bun run dev          # NOT IMPLEMENTED
-# bun run scan         # NOT IMPLEMENTED
+# bun run scan         # NOT IMPLEMENTED (Phase 5)
 ```
 
 ---
@@ -49,27 +58,43 @@ Commands that DO NOT work yet:
 
 ```
 auggiesec-agent/
-├── index.ts                 [EXISTS]     Entry point (skeleton only)
-├── package.json             [EXISTS]     Dependencies declared
+├── index.ts                 [EXISTS]     Entry point (imports instrumentation first)
+├── package.json             [EXISTS]     Dependencies + scripts
 ├── tsconfig.json            [EXISTS]     TypeScript config (Bun-optimized)
 ├── bun.lock                 [EXISTS]     Lockfile
 ├── .gitignore               [EXISTS]     Standard ignores
+├── .env.example             [EXISTS]     Environment template
+├── .env                     [TO CREATE]  Your local credentials (gitignored)
+│
+├── .github/
+│   └── workflows/
+│       └── test.yml         [EXISTS]     Bun test workflow
+│
 ├── docs/
-│   └── PRD.md               [EXISTS]     Full requirements (292 lines)
+│   ├── PRD.md               [EXISTS]     Full requirements
+│   └── PHASE1_PLAN.md       [EXISTS]     Phase 1 implementation plan
 │
-├── .env                     [TO CREATE]  Environment variables
-├── .env.example             [TO CREATE]  Template for .env
-│
-└── src/                     [TO BUILD]   Implementation code
-    ├── instrumentation.ts               OpenTelemetry/Langfuse init
-    ├── config.ts                        Config validation (Zod)
-    ├── graph/
-    │   ├── state.ts                     LangGraph state definition
-    │   ├── nodes/                       Analysis nodes
-    │   └── index.ts                     Graph assembly
-    ├── tools/                           LangChain tools (Auggie wrappers)
-    ├── rules/                           OWASP rule files (paraphrased)
-    └── cli.ts                           CLI entrypoint
+└── src/
+    ├── instrumentation.ts   [EXISTS]     OpenTelemetry + Langfuse init
+    ├── instrumentation.test.ts [EXISTS]  Instrumentation tests
+    ├── config.ts            [EXISTS]     Config validation (Zod)
+    ├── config.test.ts       [EXISTS]     Config tests
+    │
+    ├── graph/               [EXISTS]     Phase 3 - LangGraph agent scaffold
+    │   ├── state.ts         [EXISTS]     SecurityAnalysisState + types
+    │   ├── state.test.ts    [EXISTS]     State type tests
+    │   ├── graph.test.ts    [EXISTS]     Graph execution tests
+    │   ├── index.ts         [EXISTS]     Graph assembly + runSecurityAnalysis
+    │   └── nodes/           [EXISTS]     Analysis nodes
+    │       ├── index.ts                  Barrel export
+    │       ├── input.ts                  Scan initialization
+    │       ├── enumerate.ts              Target discovery (placeholder)
+    │       ├── analyze.ts                Security analysis (placeholder)
+    │       ├── aggregate.ts              Findings aggregation
+    │       └── output.ts                 Scan finalization
+    ├── tools/               [TO BUILD]   Phase 4 - LangChain tools (Auggie wrappers)
+    ├── rules/               [TO BUILD]   Phase 4 - OWASP rule files (paraphrased)
+    └── cli.ts               [TO BUILD]   Phase 5 - CLI entrypoint
 ```
 
 ---
@@ -78,80 +103,29 @@ auggiesec-agent/
 
 All secrets and environment-specific values via environment variables. Never hardcode.
 
-### .env.example Template (TO CREATE)
+### .env.example Template
 
-```bash
-# ============================================
-# OWASP GraphGuard Configuration
-# Copy to .env and fill in values
-# ============================================
+See [.env.example](.env.example) for the full template. Key variables:
 
-# --- Langfuse Observability ---
-LANGFUSE_PUBLIC_KEY=pk-lf-...
-LANGFUSE_SECRET_KEY=sk-lf-...
-LANGFUSE_HOST=https://cloud.langfuse.com
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LANGFUSE_PUBLIC_KEY` | Yes (Phase 1+) | Starts with `pk-lf-` |
+| `LANGFUSE_SECRET_KEY` | Yes (Phase 1+) | Starts with `sk-lf-` |
+| `LANGFUSE_HOST` | No | Default: `https://cloud.langfuse.com` |
+| `AUGMENT_API_KEY` | Yes (Phase 2+) | Starts with `aug_` |
+| `ANTHROPIC_API_KEY` | Yes (Phase 2+) | Starts with `sk-ant-` |
+| `NODE_ENV` | No | `development` / `production` / `test` |
+| `LOG_LEVEL` | No | `debug` / `info` / `warn` / `error` |
 
-# --- Augment / Auggie SDK ---
-AUGMENT_API_KEY=aug_...
+### Config Validation Pattern (IMPLEMENTED)
 
-# --- LLM Provider (choose one) ---
-ANTHROPIC_API_KEY=sk-ant-...
-# OPENAI_API_KEY=sk-...
+See [src/config.ts](src/config.ts) for the full implementation. Key features:
 
-# --- Target Repository ---
-WORKSPACE_ROOT=./nodejs-goof
-
-# --- Application ---
-NODE_ENV=development
-LOG_LEVEL=debug
-```
-
-### Config Validation Pattern (TO IMPLEMENT)
-
-```typescript
-// src/config.ts
-import { z } from 'zod';
-
-const ConfigSchema = z.object({
-  langfuse: z.object({
-    publicKey: z.string().startsWith('pk-lf-'),
-    secretKey: z.string().startsWith('sk-lf-'),
-    host: z.string().url().default('https://cloud.langfuse.com'),
-  }),
-  augment: z.object({
-    apiKey: z.string().startsWith('aug_'),
-  }),
-  llm: z.object({
-    provider: z.enum(['anthropic', 'openai']).default('anthropic'),
-    apiKey: z.string(),
-  }),
-  workspaceRoot: z.string().default('./nodejs-goof'),
-  nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
-});
-
-export function loadConfig() {
-  const result = ConfigSchema.safeParse({
-    langfuse: {
-      publicKey: process.env.LANGFUSE_PUBLIC_KEY,
-      secretKey: process.env.LANGFUSE_SECRET_KEY,
-      host: process.env.LANGFUSE_HOST,
-    },
-    augment: { apiKey: process.env.AUGMENT_API_KEY },
-    llm: {
-      provider: process.env.LLM_PROVIDER,
-      apiKey: process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY,
-    },
-    workspaceRoot: process.env.WORKSPACE_ROOT,
-    nodeEnv: process.env.NODE_ENV,
-  });
-
-  if (!result.success) {
-    console.error('Configuration validation failed:', result.error.format());
-    process.exit(1);
-  }
-  return result.data;
-}
-```
+- Zod schema validation with custom error messages
+- Required fields: `langfuse.publicKey`, `langfuse.secretKey`
+- Optional fields for Phase 2+: `augment.apiKey`, `llm.apiKey`
+- Fail-fast: exits with code 1 on validation failure
+- Type inference: `Config` type exported for use in application code
 
 ---
 
@@ -165,8 +139,8 @@ This project follows the [12-Factor App methodology](https://12factor.net/) adap
 |--------|-----------|--------|----------------|
 | **I. Codebase** | One repo, many deploys | Done | Single git repo |
 | **II. Dependencies** | Explicit declaration | Done | package.json with lockfile |
-| **III. Config** | Environment variables | TO BUILD | .env + Zod validation |
-| **XI. Logs** | Event streams (stdout) | TO BUILD | OpenTelemetry + Langfuse |
+| **III. Config** | Environment variables | Done | .env + Zod validation |
+| **XI. Logs** | Event streams (stdout) | Done | OpenTelemetry + Langfuse |
 
 ### Operational Factors (Lightweight for CLI)
 
@@ -215,33 +189,36 @@ import { runScan } from './src/cli';
 // ... rest of imports
 ```
 
-### instrumentation.ts Pattern (TO IMPLEMENT)
+### instrumentation.ts Pattern (IMPLEMENTED)
 
 ```typescript
 // src/instrumentation.ts
+import 'dotenv/config';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { Langfuse, LangfuseSpanProcessor } from 'langfuse';
+import { LangfuseSpanProcessor } from '@langfuse/otel';  // Note: @langfuse/otel, not langfuse
+import { trace } from '@opentelemetry/api';
 
-const langfuse = new Langfuse({
-  publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
-  secretKey: process.env.LANGFUSE_SECRET_KEY!,
-  baseUrl: process.env.LANGFUSE_HOST,
-});
-
+// LangfuseSpanProcessor auto-reads LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY from env
 const sdk = new NodeSDK({
-  spanProcessors: [new LangfuseSpanProcessor({ langfuse })],
+  spanProcessors: [
+    new LangfuseSpanProcessor({
+      baseUrl: process.env.LANGFUSE_HOST || 'https://cloud.langfuse.com',
+    }),
+  ],
 });
 
 sdk.start();
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  await langfuse.flushAsync();
   await sdk.shutdown();
 });
 
-export { langfuse };
+// Export tracer for use in application code
+export const tracer = trace.getTracer('graphguard', '0.1.0');
 ```
+
+**Important:** Use `@langfuse/otel` package, not `langfuse` directly. The `LangfuseSpanProcessor` automatically reads credentials from environment variables.
 
 ### Trace Hierarchy
 
@@ -270,55 +247,66 @@ Run (top-level scan)
 
 ## Tech Stack Reference
 
-Dependencies declared in package.json (status: declared but not yet used):
+Dependencies in package.json:
 
 | Package | Version | Purpose | Status |
 |---------|---------|---------|--------|
-| `@langchain/langgraph` | ^1.0.4 | Graph-based workflow orchestration | Declared |
-| `@langchain/core` | ^1.1.4 | LLM abstractions and tools | Declared |
-| `@langchain/anthropic` | ^1.2.3 | Anthropic model integration | Declared |
-| `langchain` | ^1.1.5 | Base LangChain utilities | Declared |
-| `@augmentcode/auggie-sdk` | ^0.1.9 | Code analysis and querying | Declared |
-| `@opentelemetry/sdk-node` | ^0.208.0 | Distributed tracing | Declared |
-| `@opentelemetry/api` | ^1.9.0 | OpenTelemetry API | Declared |
-| `langfuse` | ^3.38.6 | LLM observability backend | Declared |
-| `zod` | ^3.24.0 | Schema validation | Declared |
-| `dotenv` | ^16.4.7 | Environment variable loading | Declared |
+| `@langfuse/otel` | ^4.4.9 | OpenTelemetry span processor for Langfuse | **In Use** |
+| `@opentelemetry/sdk-node` | ^0.208.0 | Distributed tracing SDK | **In Use** |
+| `@opentelemetry/api` | ^1.9.0 | OpenTelemetry API | **In Use** |
+| `langfuse` | ^3.38.6 | LLM observability backend | **In Use** |
+| `zod` | ^3.24.0 | Schema validation | **In Use** |
+| `dotenv` | ^16.4.7 | Environment variable loading | **In Use** |
+| `@langchain/langgraph` | ^1.0.4 | Graph-based workflow orchestration | **In Use** |
+| `@langchain/core` | ^1.1.4 | LLM abstractions and tools | **In Use** |
+| `@langchain/anthropic` | ^1.2.3 | Anthropic model integration | Phase 4 |
+| `langchain` | ^1.1.5 | Base LangChain utilities | Phase 4 |
+| `@augmentcode/auggie-sdk` | ^0.1.9 | Code analysis and querying | Phase 4 |
 
 ---
 
 ## Implementation Roadmap
 
-### Phase 1: Skeleton Setup [CURRENT]
+### Phase 1: Skeleton Setup [COMPLETE]
 
 ```
 [x] bun init + TypeScript config
 [x] package.json with all dependencies
 [x] docs/PRD.md with full requirements
-[ ] .env.example template
-[ ] .gitignore update for .env
+[x] .env.example template
+[x] .gitignore configured for .env
 ```
 
-### Phase 2: Observability Wiring [NEXT]
+### Phase 2: Observability Wiring [COMPLETE]
 
 ```
-[ ] Create src/instrumentation.ts
-[ ] Update index.ts to import instrumentation FIRST
-[ ] Create src/config.ts with Zod validation
-[ ] Create .env with Langfuse credentials
-[ ] Verify traces appear in Langfuse dashboard
+[x] Create src/instrumentation.ts with @langfuse/otel
+[x] Update index.ts to import instrumentation FIRST
+[x] Create src/config.ts with Zod validation
+[x] Create test files (config.test.ts, instrumentation.test.ts)
+[x] Add GitHub Actions workflow for tests
+[ ] Verify traces appear in Langfuse dashboard (requires .env setup)
 ```
 
-**Dependencies**: Langfuse account, API keys
+**Dependencies**: Langfuse account, API keys in .env
 
-### Phase 3: LangGraph Agent Scaffold
+### Phase 3: LangGraph Agent Scaffold [COMPLETE]
 
 ```
-[ ] Create src/graph/state.ts (SecurityAnalysisState type)
-[ ] Create minimal StateGraph with input/output nodes
-[ ] Wire graph execution to instrumentation
-[ ] Add placeholder analysis node
+[x] Create src/graph/state.ts (SecurityAnalysisState type with OWASP categories)
+[x] Create minimal StateGraph with 5 nodes (input, enumerate, analyze, aggregate, output)
+[x] Wire graph execution to instrumentation (all nodes traced)
+[x] Add placeholder analysis node (mock findings for testing)
+[x] Create comprehensive tests (state.test.ts, graph.test.ts)
+[x] Export runSecurityAnalysis() function for programmatic use
 ```
+
+**Key features**:
+- `SecurityAnalysisStateAnnotation` with LangGraph Annotation pattern
+- All 10 OWASP Top 10 2021 categories defined as typed constants
+- `SecurityFinding` interface matching PRD Section 6.4
+- Markdown summary generation in aggregate node
+- Full OpenTelemetry span hierarchy for each node
 
 **Dependencies**: Phase 2 complete
 
