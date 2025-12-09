@@ -22,6 +22,18 @@ const VULNERABILITY_PATTERNS: Record<
       severity: 'high',
       fix: 'Use proper RBAC (Role-Based Access Control) with database-backed permissions.',
     },
+    {
+      pattern: /res\.redirect\s*\(\s*req\.(body|query|params)\./gi,
+      title: 'Open redirect vulnerability',
+      severity: 'medium',
+      fix: 'Validate redirect URLs against a whitelist of allowed destinations.',
+    },
+    {
+      pattern: /redirect\s*\(\s*[^)]*redirectPage|redirect\s*\(\s*[^)]*returnUrl|redirect\s*\(\s*[^)]*next/gi,
+      title: 'Potential open redirect via user-controlled parameter',
+      severity: 'medium',
+      fix: 'Validate redirect URLs against a whitelist of allowed destinations.',
+    },
   ],
   'A02:2021-Cryptographic Failures': [
     {
@@ -80,6 +92,24 @@ const VULNERABILITY_PATTERNS: Record<
       severity: 'critical',
       fix: 'Use parameterized queries or an ORM with prepared statements.',
     },
+    {
+      pattern: /\.find\s*\(\s*\{[^}]*req\.body\./gi,
+      title: 'NoSQL injection - user input in MongoDB query',
+      severity: 'critical',
+      fix: 'Validate and sanitize user input. Use mongoose-sanitize or similar library.',
+    },
+    {
+      pattern: /\.findOne\s*\(\s*\{[^}]*req\.body\./gi,
+      title: 'NoSQL injection - user input in MongoDB findOne',
+      severity: 'critical',
+      fix: 'Validate and sanitize user input. Use mongoose-sanitize or similar library.',
+    },
+    {
+      pattern: /username:\s*req\.body\.username.*password:\s*req\.body\.password/gi,
+      title: 'NoSQL injection in authentication query',
+      severity: 'critical',
+      fix: 'Validate input types and use mongoose-sanitize. Never pass raw user input to queries.',
+    },
   ],
   'A04:2021-Insecure Design': [],
   'A05:2021-Security Misconfiguration': [
@@ -96,7 +126,16 @@ const VULNERABILITY_PATTERNS: Record<
       fix: 'Use helmet.js or manually set security headers (CSP, X-Frame-Options, etc.).',
     },
   ],
-  'A06:2021-Vulnerable and Outdated Components': [],
+  'A06:2021-Vulnerable and Outdated Components': [
+    // Note: Dependency analysis is handled separately in analyzeDependencies()
+    // These patterns catch inline requires of known vulnerable packages
+    {
+      pattern: /require\s*\(\s*['"](?:mongoose|st|ms|marked|lodash|express-fileupload|adm-zip)['"]\s*\)/gi,
+      title: 'Usage of package with known vulnerabilities',
+      severity: 'medium',
+      fix: 'Check for security advisories and update to patched versions.',
+    },
+  ],
   'A07:2021-Identification and Authentication Failures': [
     {
       pattern: /session\s*\(\s*\{[^}]*secret:\s*['"][^'"]{0,32}['"]/gi,
@@ -155,6 +194,109 @@ const VULNERABILITY_PATTERNS: Record<
 };
 
 /**
+ * Known vulnerable packages with their CVE information
+ */
+const KNOWN_VULNERABLE_PACKAGES: Record<
+  string,
+  { vulnerability: string; severity: SecurityFinding['severity']; fix: string }
+> = {
+  mongoose: {
+    vulnerability: 'Buffer exposure vulnerability (CVE-2019-17426)',
+    severity: 'high',
+    fix: 'Update mongoose to version 5.7.5 or later.',
+  },
+  st: {
+    vulnerability: 'Directory traversal vulnerability (CVE-2017-16224)',
+    severity: 'high',
+    fix: 'Update st to version 1.2.2 or later.',
+  },
+  ms: {
+    vulnerability: 'ReDoS vulnerability (CVE-2017-20162)',
+    severity: 'medium',
+    fix: 'Update ms to version 2.0.0 or later.',
+  },
+  marked: {
+    vulnerability: 'XSS vulnerability (CVE-2017-17461)',
+    severity: 'high',
+    fix: 'Update marked to version 0.3.9 or later.',
+  },
+  lodash: {
+    vulnerability: 'Prototype pollution (CVE-2019-10744)',
+    severity: 'high',
+    fix: 'Update lodash to version 4.17.12 or later.',
+  },
+  'express-fileupload': {
+    vulnerability: 'Prototype pollution (CVE-2020-7699)',
+    severity: 'critical',
+    fix: 'Update express-fileupload to version 1.1.10 or later.',
+  },
+  'adm-zip': {
+    vulnerability: 'Zip Slip vulnerability (CVE-2018-1002204)',
+    severity: 'high',
+    fix: 'Update adm-zip to version 0.4.11 or later.',
+  },
+  dustjs: {
+    vulnerability: 'Code injection vulnerability (CVE-2016-9383)',
+    severity: 'critical',
+    fix: 'Update dustjs-linkedin to version 2.6.0 or later.',
+  },
+  'dustjs-linkedin': {
+    vulnerability: 'Code injection vulnerability (CVE-2016-9383)',
+    severity: 'critical',
+    fix: 'Update dustjs-linkedin to version 2.6.0 or later.',
+  },
+};
+
+/**
+ * Analyze package.json for vulnerable dependencies
+ */
+function analyzeDependencies(
+  packageJsonPath: string,
+  scanId: string
+): SecurityFinding[] {
+  const findings: SecurityFinding[] = [];
+  const content = readFileContent(packageJsonPath);
+
+  if (!content) return findings;
+
+  try {
+    const pkg = JSON.parse(content);
+    const allDeps = {
+      ...pkg.dependencies,
+      ...pkg.devDependencies,
+    };
+
+    for (const [name, versionOrObj] of Object.entries(allDeps)) {
+      if (KNOWN_VULNERABLE_PACKAGES[name]) {
+        // Handle both package.json (string version) and package-lock.json (object with version)
+        const version =
+          typeof versionOrObj === 'string'
+            ? versionOrObj
+            : (versionOrObj as { version?: string })?.version || 'unknown';
+        const vuln = KNOWN_VULNERABLE_PACKAGES[name];
+        findings.push({
+          id: `finding_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          category: 'A06:2021-Vulnerable and Outdated Components',
+          title: `Vulnerable dependency: ${name}@${version}`,
+          severity: vuln.severity,
+          evidence: {
+            file: packageJsonPath,
+            lineRange: 'dependencies',
+            codeSnippet: `"${name}": "${version}"`,
+          },
+          explanation: vuln.vulnerability,
+          recommendedFix: vuln.fix,
+        });
+      }
+    }
+  } catch {
+    // Invalid JSON, skip
+  }
+
+  return findings;
+}
+
+/**
  * Read file content safely
  */
 function readFileContent(filePath: string): string | null {
@@ -211,10 +353,12 @@ async function analyzeTarget(
         'target.type': target.type,
       });
 
-      // Skip dependency files for pattern analysis (handled separately)
+      // Handle dependency files separately
       if (target.type === 'dependency') {
+        const depFindings = analyzeDependencies(target.path, scanId);
+        span.setAttributes({ 'findings.count': depFindings.length });
         span.setStatus({ code: SpanStatusCode.OK });
-        return findings;
+        return depFindings;
       }
 
       // Read file content
