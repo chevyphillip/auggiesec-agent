@@ -18,6 +18,14 @@ export { analyzeDependenciesTool } from './analyze-dependencies';
 export { getFileContentTool } from './get-file-content';
 export { searchCodeTool } from './search-code';
 
+// Langfuse prompt utilities
+export {
+    OWASP_PROMPTS, getLangfuseClient,
+    getOwaspPrompt,
+    getPrompt
+} from './langfuse-prompts';
+export type { CompiledPrompt, OwaspPromptName, PromptConfig } from './langfuse-prompts';
+
 // Re-export types
 export type {
     AnalyzeDependenciesInput,
