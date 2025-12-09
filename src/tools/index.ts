@@ -7,15 +7,21 @@
  * @module tools
  */
 
-export { searchCodeTool } from './search-code';
-export { getFileContentTool } from './get-file-content';
+// Auggie client
+export {
+    closeAuggieClient, getAuggieClient, getClientConfig, isAuggieClientInitialized
+} from './auggie-client';
+export type { AuggieClientConfig } from './auggie-client';
+
+// Tools
 export { analyzeDependenciesTool } from './analyze-dependencies';
+export { getFileContentTool } from './get-file-content';
+export { searchCodeTool } from './search-code';
 
 // Re-export types
-export type { SearchCodeInput, SearchCodeResult } from './search-code';
-export type { GetFileContentInput, GetFileContentResult } from './get-file-content';
 export type {
-  AnalyzeDependenciesInput,
-  AnalyzeDependenciesResult,
+    AnalyzeDependenciesInput,
+    AnalyzeDependenciesResult
 } from './analyze-dependencies';
-
+export type { GetFileContentInput, GetFileContentResult } from './get-file-content';
+export type { SearchCodeInput, SearchCodeResult } from './search-code';
