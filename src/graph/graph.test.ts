@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 // Store original environment
 const originalEnv = { ...process.env };
@@ -57,16 +57,27 @@ describe('Graph', () => {
       expect(result.summary).toContain('./nodejs-goof');
     });
 
-    test('generates findings in placeholder mode', async () => {
+    test('generates real security findings', async () => {
       const { runSecurityAnalysis } = await import('./index');
 
       const result = await runSecurityAnalysis({
         userQuery: 'Find all security issues',
       });
 
-      // Phase 3 placeholder generates at least one mock finding
+      // Phase 4 real analysis generates actual findings from nodejs-goof
       expect(result.findings.length).toBeGreaterThanOrEqual(1);
-      expect(result.analyzedCategories).toContain('A03:2021-Injection');
+      // Should find at least one OWASP category
+      expect(result.analyzedCategories.length).toBeGreaterThanOrEqual(1);
+      // Verify findings have required structure
+      for (const finding of result.findings) {
+        expect(finding.id).toBeDefined();
+        expect(finding.category).toBeDefined();
+        expect(finding.title).toBeDefined();
+        expect(finding.severity).toBeDefined();
+        expect(finding.evidence.file).toBeDefined();
+        expect(finding.evidence.lineRange).toBeDefined();
+        expect(finding.recommendedFix).toBeDefined();
+      }
     });
 
     test('includes timing information', async () => {
