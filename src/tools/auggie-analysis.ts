@@ -18,7 +18,7 @@
  * @module tools/auggie-analysis
  */
 
-import { Auggie } from '@augmentcode/auggie-sdk';
+import { APIError, Auggie, BlobTooLargeError } from '@augmentcode/auggie-sdk';
 import { SpanStatusCode } from '@opentelemetry/api';
 import type { OwaspCategory, SecurityFinding } from '../graph/state';
 import { tracer } from '../instrumentation';
@@ -253,12 +253,36 @@ Return ONLY the JSON array, no other text.`;
 
             return findings;
           } catch (error) {
+            // Handle SDK-specific errors with proper categorization
+            if (error instanceof APIError) {
+              console.error(`[auggie] API Error (${error.status} ${error.statusText}):`, error.message);
+              span.setAttributes({
+                'error.type': 'APIError',
+                'error.status': error.status,
+                'error.statusText': error.statusText,
+              });
+
+              // Retry logic for transient failures (5xx errors)
+              if (error.status >= 500 && error.status < 600) {
+                console.log('[auggie] Transient API error detected, consider retry');
+              }
+            } else if (error instanceof BlobTooLargeError) {
+              console.error('[auggie] File too large for indexing:', error.message);
+              span.setAttributes({
+                'error.type': 'BlobTooLargeError',
+              });
+            } else {
+              console.error(`[auggie] Analysis failed for ${category}:`, error);
+              span.setAttributes({
+                'error.type': error instanceof Error ? error.constructor.name : 'unknown',
+              });
+            }
+
             span.setStatus({
               code: SpanStatusCode.ERROR,
               message: error instanceof Error ? error.message : String(error),
             });
             span.recordException(error as Error);
-            console.error(`[auggie] Analysis failed for ${category}:`, error);
             return [];
           } finally {
             // Always close the client
