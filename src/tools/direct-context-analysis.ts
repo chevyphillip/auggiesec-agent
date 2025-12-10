@@ -27,8 +27,14 @@ import { APIError, BlobTooLargeError, DirectContext } from '@augmentcode/auggie-
 import { SpanStatusCode } from '@opentelemetry/api';
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import type { Config } from '../config';
 import type { OwaspCategory } from '../graph/state';
 import { tracer } from '../instrumentation';
+
+/**
+ * Augment-specific configuration subset for DirectContext
+ */
+export type DirectContextConfig = Pick<Config, 'augment' | 'nodeEnv'>;
 
 interface DirectContextCredentials {
   apiKey?: string;
@@ -36,10 +42,12 @@ interface DirectContextCredentials {
 }
 
 /**
- * Get DirectContext credentials from environment variables
+ * Get DirectContext credentials from config or environment variables (fallback)
+ * @param config - Optional validated config from loadConfig()
  */
-function getDirectContextCredentials(): DirectContextCredentials {
-  const sessionAuth = process.env.AUGMENT_SESSION_AUTH;
+function getDirectContextCredentials(config?: DirectContextConfig): DirectContextCredentials {
+  // Use validated config if provided
+  const sessionAuth = config?.augment?.sessionAuth ?? process.env.AUGMENT_SESSION_AUTH;
   if (sessionAuth) {
     try {
       const parsed = JSON.parse(sessionAuth);
@@ -54,9 +62,10 @@ function getDirectContextCredentials(): DirectContextCredentials {
     }
   }
 
+  // Fallback to separated token/URL from config or env vars
   return {
-    apiKey: process.env.AUGMENT_API_TOKEN,
-    apiUrl: process.env.AUGMENT_API_URL,
+    apiKey: config?.augment?.apiToken ?? process.env.AUGMENT_API_TOKEN,
+    apiUrl: config?.augment?.apiUrl ?? process.env.AUGMENT_API_URL,
   };
 }
 
@@ -110,14 +119,17 @@ async function readDirectoryFiles(dirPath: string): Promise<File[]> {
  * Create or restore a DirectContext instance
  *
  * @param stateFilePath - Optional path to saved state file
+ * @param config - Optional validated config from loadConfig()
  * @returns DirectContext instance
  */
 export async function createDirectContext(
-  stateFilePath?: string
+  stateFilePath?: string,
+  config?: DirectContextConfig
 ): Promise<DirectContext> {
   return tracer.startActiveSpan('direct_context.create', async (span) => {
     try {
-      const credentials = getDirectContextCredentials();
+      const credentials = getDirectContextCredentials(config);
+      const isDebug = config?.nodeEnv === 'development' ?? process.env.NODE_ENV === 'development';
       let context: DirectContext;
 
       if (stateFilePath) {
@@ -127,7 +139,7 @@ export async function createDirectContext(
 
         context = await DirectContext.importFromFile(stateFilePath, {
           ...credentials,
-          debug: process.env.NODE_ENV === 'development',
+          debug: isDebug,
         });
 
         const indexedPaths = context.getIndexedPaths();
@@ -139,7 +151,7 @@ export async function createDirectContext(
 
         context = await DirectContext.create({
           ...credentials,
-          debug: process.env.NODE_ENV === 'development',
+          debug: isDebug,
         });
       }
 
