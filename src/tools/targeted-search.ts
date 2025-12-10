@@ -211,14 +211,14 @@ export async function searchAndAnalyze(
  */
 function buildAnalysisPrompt(category: OwaspCategory): string {
   const categoryCode = category.split(':')[0] ?? 'A00';
-  const categoryName = category.split('-')[1] ?? category;
+  const categoryName = category.split('-').slice(1).join('-') || category;
 
   return `You are a security expert analyzing code for ${category} vulnerabilities.
 
 Analyze the provided code for potential security issues related to ${categoryName}.
 
 For each vulnerability found, provide:
-1. **Severity**: CRITICAL, HIGH, MEDIUM, or LOW
+1. **Severity**: critical, high, medium, low, or info
 2. **Title**: Brief description of the issue
 3. **Description**: Detailed explanation of the vulnerability
 4. **Location**: File path and line numbers
@@ -228,14 +228,14 @@ Return your findings as a JSON array with this structure:
 \`\`\`json
 [
   {
-    "severity": "HIGH",
+    "severity": "high",
     "title": "SQL Injection in user query",
-    "description": "User input is directly concatenated into SQL query without sanitization",
-    "filePath": "src/database/users.ts",
-    "lineStart": 45,
-    "lineEnd": 47,
+    "category": "A03:2021-Injection",
+    "file": "src/database/users.ts",
+    "lineRange": "45-47",
     "codeSnippet": "const query = 'SELECT * FROM users WHERE id = ' + userId;",
-    "recommendation": "Use parameterized queries or an ORM to prevent SQL injection"
+    "explanation": "User input is directly concatenated into SQL query without sanitization",
+    "recommendedFix": "Use parameterized queries or an ORM to prevent SQL injection"
   }
 ]
 \`\`\`
