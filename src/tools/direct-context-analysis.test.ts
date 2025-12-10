@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { DirectContext as DirectContextType } from '@augmentcode/auggie-sdk';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { DirectContextConfig } from './direct-context-analysis';
 
 // Create mock DirectContext instance
@@ -15,7 +15,6 @@ const mockDirectContext: Partial<DirectContextType> = {
   ) as DirectContextType['search'],
   getIndexedPaths: mock(() => ['src/index.ts', 'src/utils.ts']) as DirectContextType['getIndexedPaths'],
   exportToFile: mock(() => Promise.resolve()) as DirectContextType['exportToFile'],
-  close: mock(() => Promise.resolve()) as DirectContextType['close'],
 };
 
 // Mock the SDK module before importing the module under test
@@ -45,10 +44,10 @@ mock.module('@augmentcode/auggie-sdk', () => ({
 
 // Import module under test after mocking
 import {
-  createDirectContext,
-  exportContextState,
-  indexRepository,
-  searchForVulnerabilities,
+    createDirectContext,
+    exportContextState,
+    indexRepository,
+    searchForVulnerabilities,
 } from './direct-context-analysis';
 
 // Default test config - all tests must pass validated config
@@ -57,7 +56,6 @@ const defaultTestConfig: DirectContextConfig = {
     apiToken: 'test-token',
     apiUrl: 'https://test.api.com',
     sessionAuth: undefined,
-    apiKey: undefined,
   },
   nodeEnv: 'test',
 };
@@ -69,7 +67,6 @@ describe('DirectContext Analysis', () => {
     (mockDirectContext.search as ReturnType<typeof mock>).mockClear();
     (mockDirectContext.getIndexedPaths as ReturnType<typeof mock>).mockClear();
     (mockDirectContext.exportToFile as ReturnType<typeof mock>).mockClear();
-    (mockDirectContext.close as ReturnType<typeof mock>).mockClear();
     mockCreate.mockClear();
     mockImportFromFile.mockClear();
   });
@@ -106,7 +103,6 @@ describe('DirectContext Analysis', () => {
           apiToken: 'custom-token',
           apiUrl: 'https://custom.api.com',
           sessionAuth: undefined,
-          apiKey: undefined,
         },
         nodeEnv: 'test',
       };
@@ -125,13 +121,12 @@ describe('DirectContext Analysis', () => {
     test('parses sessionAuth JSON when provided in config', async () => {
       const config: DirectContextConfig = {
         augment: {
-          sessionAuth: JSON.stringify({
+          sessionAuth: {
             accessToken: 'session-token',
             tenantURL: 'https://tenant.api.com',
-          }),
+          },
           apiToken: undefined,
           apiUrl: undefined,
-          apiKey: undefined,
         },
         nodeEnv: 'development',
       };

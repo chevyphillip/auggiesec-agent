@@ -14,14 +14,13 @@
 
 import { APIError, Auggie, BlobTooLargeError } from '@augmentcode/auggie-sdk';
 import { SpanStatusCode } from '@opentelemetry/api';
-import type { AugmentCredentials } from '../config';
+import type { AugmentCredentials, Config } from '../config';
 import type { OwaspCategory, SecurityFinding } from '../graph/state';
 import { tracer } from '../instrumentation';
 import { withAgent } from '../observability';
 import { getOwaspPrompt } from './langfuse-prompts';
 import {
-    clearFindings,
-    reportVulnerabilityTool
+    clearFindings
 } from './report-vulnerability';
 
 /**
