@@ -129,7 +129,8 @@ export async function createDirectContext(
   return tracer.startActiveSpan('direct_context.create', async (span) => {
     try {
       const credentials = getDirectContextCredentials(config);
-      const isDebug = config?.nodeEnv === 'development' ?? process.env.NODE_ENV === 'development';
+      const nodeEnv = config?.nodeEnv ?? process.env.NODE_ENV;
+      const isDebug = nodeEnv === 'development';
       let context: DirectContext;
 
       if (stateFilePath) {
