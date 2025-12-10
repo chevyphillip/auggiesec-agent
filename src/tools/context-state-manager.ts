@@ -19,10 +19,11 @@
  */
 
 import type { DirectContextState } from '@augmentcode/auggie-sdk';
+import { SpanStatusCode } from '@opentelemetry/api';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { tracer } from '../instrumentation';
-import { SpanStatusCode } from '@opentelemetry/api';
+import type { FileMetadata } from './incremental-indexer';
 
 /**
  * Extended state with scan metadata
@@ -34,6 +35,8 @@ export interface ScanState extends DirectContextState {
     repoPath: string;
     indexedFileCount: number;
   };
+  /** File metadata for incremental indexing */
+  fileMetadata?: Record<string, FileMetadata>;
 }
 
 /**
@@ -60,12 +63,14 @@ export function getStateFilePath(scanId: string, stateDir?: string): string {
  * @param scanId - Scan identifier
  * @param repoPath - Repository path
  * @param stateDir - Optional custom state directory
+ * @param fileMetadata - Optional file metadata for incremental indexing
  */
 export async function saveContextState(
   state: DirectContextState,
   scanId: string,
   repoPath: string,
-  stateDir?: string
+  stateDir?: string,
+  fileMetadata?: Map<string, FileMetadata>
 ): Promise<string> {
   return tracer.startActiveSpan('context_state.save', async (span) => {
     try {
@@ -84,6 +89,7 @@ export async function saveContextState(
           repoPath,
           indexedFileCount: state.blobs.length,
         },
+        fileMetadata: fileMetadata ? Object.fromEntries(fileMetadata) : undefined,
       };
 
       await writeFile(stateFilePath, JSON.stringify(scanState, null, 2), 'utf-8');
@@ -162,4 +168,3 @@ export async function loadContextState(
     }
   });
 }
-
