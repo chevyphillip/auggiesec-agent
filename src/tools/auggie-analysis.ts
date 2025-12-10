@@ -23,6 +23,11 @@ import {
     clearFindings
 } from './report-vulnerability';
 
+/**
+ * Augment-specific configuration subset for Auggie analysis
+ */
+export type AuggieConfig = Pick<Config, 'augment' | 'nodeEnv'>;
+
 export type AuggieModel = 'haiku4.5' | 'sonnet4.5' | 'sonnet4' | 'gpt5';
 
 export interface AuggieAnalysisOptions {
