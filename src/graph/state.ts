@@ -1,4 +1,5 @@
 import { Annotation } from '@langchain/langgraph';
+import type { AugmentCredentials } from '../config';
 
 /**
  * OWASP Top 10 2021 Categories
@@ -133,6 +134,12 @@ export const SecurityAnalysisStateAnnotation = Annotation.Root({
     reducer: (_, next) => next,
     default: () => undefined,
   }),
+
+  // Augment credentials (set at graph invocation, immutable during execution)
+  augmentCredentials: Annotation<AugmentCredentials>({
+    reducer: (_, next) => next,
+    default: () => ({ apiKey: '', apiUrl: '' }),
+  }),
 });
 
 /**
@@ -147,6 +154,7 @@ export interface GraphInput {
   repoPath?: string;
   userQuery: string;
   scopeFilter?: string;
+  augmentCredentials: AugmentCredentials;
 }
 
 /**
