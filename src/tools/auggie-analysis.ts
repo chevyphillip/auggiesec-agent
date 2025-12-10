@@ -20,6 +20,7 @@
 
 import { Auggie } from '@augmentcode/auggie-sdk';
 import { SpanStatusCode } from '@opentelemetry/api';
+import type { Config } from '../config';
 import type { OwaspCategory, SecurityFinding } from '../graph/state';
 import { tracer } from '../instrumentation';
 import { withAgent } from '../observability';
@@ -27,6 +28,11 @@ import { getOwaspPrompt } from './langfuse-prompts';
 import {
     clearFindings
 } from './report-vulnerability';
+
+/**
+ * Augment-specific configuration subset for Auggie analysis
+ */
+export type AuggieConfig = Pick<Config, 'augment' | 'nodeEnv'>;
 
 export type AuggieModel = 'haiku4.5' | 'sonnet4.5' | 'sonnet4' | 'gpt5';
 
@@ -36,12 +42,13 @@ interface AuggieCredentials {
 }
 
 /**
- * Get Auggie credentials from environment variables
+ * Get Auggie credentials from validated config
+ * All env vars must flow through loadConfig() - no direct process.env access
  * Supports both AUGMENT_SESSION_AUTH (full JSON) and separated token/URL
+ * @param config - Validated config from loadConfig()
  */
-function getAuggieCredentials(): AuggieCredentials {
-  // First try AUGMENT_SESSION_AUTH (full JSON token from `auggie token print`)
-  const sessionAuth = process.env.AUGMENT_SESSION_AUTH;
+function getAuggieCredentials(config: AuggieConfig): AuggieCredentials {
+  const sessionAuth = config.augment?.sessionAuth;
   if (sessionAuth) {
     try {
       const parsed = JSON.parse(sessionAuth);
@@ -57,10 +64,9 @@ function getAuggieCredentials(): AuggieCredentials {
     }
   }
 
-  // Fallback to separated AUGMENT_API_TOKEN / AUGMENT_API_URL
   return {
-    apiKey: process.env.AUGMENT_API_TOKEN,
-    apiUrl: process.env.AUGMENT_API_URL,
+    apiKey: config.augment?.apiToken,
+    apiUrl: config.augment?.apiUrl,
   };
 }
 
@@ -73,6 +79,8 @@ export interface AuggieAnalysisOptions {
   scanId: string;
   /** Model to use (default: sonnet4.5) */
   model?: AuggieModel;
+  /** Validated config from loadConfig() */
+  config: AuggieConfig;
 }
 
 /**
@@ -151,7 +159,7 @@ function parseAuggieResponse(
 export async function analyzeWithAuggie(
   options: AuggieAnalysisOptions
 ): Promise<SecurityFinding[]> {
-  const { repoPath, category, scanId, model = 'sonnet4.5' } = options;
+  const { repoPath, category, scanId, model = 'sonnet4.5', config } = options;
   const categoryCode = getCategoryCode(category);
 
   return withAgent(
@@ -185,8 +193,8 @@ export async function analyzeWithAuggie(
               'prompt.isFallback': prompt.isFallback,
             });
 
-            // Get credentials from environment variables
-            const credentials = getAuggieCredentials();
+            // Get credentials from config or environment variables
+            const credentials = getAuggieCredentials(config);
 
             if (credentials.apiKey) {
               console.log('[auggie] Using API credentials from environment');

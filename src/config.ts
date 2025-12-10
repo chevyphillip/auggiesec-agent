@@ -18,6 +18,9 @@ const ConfigSchema = z.object({
   }),
   augment: z.object({
     apiKey: z.string().startsWith('aug_').optional(),
+    sessionAuth: z.string().optional(), // Full JSON token from `auggie token print`
+    apiToken: z.string().optional(), // Separated API token
+    apiUrl: z.string().url().optional(), // API URL
   }),
   llm: z.object({
     provider: z.enum(['anthropic', 'openai']).default('anthropic'),
@@ -46,6 +49,9 @@ export function loadConfig(): Config {
     },
     augment: {
       apiKey: process.env.AUGMENT_API_KEY,
+      sessionAuth: process.env.AUGMENT_SESSION_AUTH,
+      apiToken: process.env.AUGMENT_API_TOKEN,
+      apiUrl: process.env.AUGMENT_API_URL,
     },
     llm: {
       provider: process.env.LLM_PROVIDER,
