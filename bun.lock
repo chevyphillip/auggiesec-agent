@@ -5,7 +5,7 @@
     "": {
       "name": "auggiesec-agent",
       "dependencies": {
-        "@augmentcode/auggie-sdk": "^0.1.9",
+        "@augmentcode/auggie-sdk": "^0.1.10",
         "@langchain/anthropic": "^1.2.3",
         "@langchain/core": "^1.1.4",
         "@langchain/langgraph": "^1.0.4",
@@ -65,7 +65,7 @@
 
     "@apidevtools/json-schema-ref-parser": ["@apidevtools/json-schema-ref-parser@14.2.1", "", { "dependencies": { "js-yaml": "^4.1.0" }, "peerDependencies": { "@types/json-schema": "^7.0.15" } }, "sha512-HmdFw9CDYqM6B25pqGBpNeLCKvGPlIx1EbLrVL0zPvj50CJQUHyBNBw45Muk0kEIkogo1VZvOKHajdMuAzSxRg=="],
 
-    "@augmentcode/auggie-sdk": ["@augmentcode/auggie-sdk@0.1.9", "", { "dependencies": { "@agentclientprotocol/sdk": "^0.5.1", "@mastra/mcp": "^0.14.1", "ai": "^5.0.86", "async-mutex": "^0.5.0", "uuid": "^11.1.0", "zod": "^4.1.12" }, "peerDependencies": { "typescript": "^5" } }, "sha512-F6nliJt7gWTj4n8aFzpATsfi+hiY/X03DUWhgeyE1etKSoCWQsj3SE+IA+tJprahArDhyhjIuoIEEQ4+2R2HCQ=="],
+    "@augmentcode/auggie-sdk": ["@augmentcode/auggie-sdk@0.1.10", "", { "dependencies": { "@agentclientprotocol/sdk": "^0.5.1", "@mastra/mcp": "^0.14.1", "ai": "^5.0.86", "async-mutex": "^0.5.0", "uuid": "^11.1.0", "zod": "^4.1.12" }, "peerDependencies": { "typescript": "^5" } }, "sha512-fDYk1vJ3KAogjK0q0bj2c9F00GebPsxJFDIfDzBoaclgH2j7QBjdvbTl+cbvpcVCF9xUf1eRaU8RAlEJf2SjAA=="],
 
     "@babel/runtime": ["@babel/runtime@7.28.4", "", {}, "sha512-Q/N6JNWvIvPnLDvjlE1OUBLPQHH6l3CltCEsHIujp45zQUSSh8K+gHnaEX45yAT1nyngnINhvWtzN+Nb9D8RAQ=="],
 

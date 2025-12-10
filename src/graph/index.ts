@@ -96,6 +96,7 @@ export async function runSecurityAnalysis(input: GraphInput): Promise<GraphOutpu
             repoPath: input.repoPath ?? './nodejs-goof',
             userQuery: input.userQuery,
             scopeFilter: input.scopeFilter,
+            augmentCredentials: input.augmentCredentials,
           });
 
           // Extract output from final state

@@ -77,6 +77,7 @@ export async function analyzeNode(
           category,
           scanId: state.scanId,
           model: 'sonnet4.5',
+          credentials: state.augmentCredentials,
         });
 
         allFindings.push(...categoryFindings);
