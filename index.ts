@@ -1,11 +1,12 @@
 await import('./src/instrumentation'); // CRITICAL: MUST be imported first
 
-import { loadConfig } from './src/config';
+import { getAugmentCredentials, loadConfig } from './src/config';
 import { runSecurityAnalysis } from './src/graph';
 import { sdk } from './src/instrumentation';
 
 // Validate configuration
 const config = loadConfig();
+const augmentCredentials = getAugmentCredentials(config);
 
 console.log(`[graphguard] Environment: ${config.nodeEnv}`);
 console.log('[graphguard] Configuration validated successfully');
@@ -16,6 +17,7 @@ try {
   const result = await runSecurityAnalysis({
     repoPath: config.workspaceRoot,
     userQuery: 'Analyze for OWASP Top 10 vulnerabilities',
+    augmentCredentials,
   });
 
   console.log('\n[graphguard] ===== Analysis Complete =====');

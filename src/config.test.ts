@@ -70,7 +70,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: {
           apiKey: 'sk-ant-test',
@@ -95,7 +95,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: {
           provider: 'anthropic',
@@ -120,7 +120,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: { apiKey: 'sk-ant-test' },
       });
@@ -134,7 +134,7 @@ describe('ConfigSchema', () => {
           publicKey: 'pk-lf-test',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: { apiKey: 'sk-ant-test' },
       });
@@ -149,7 +149,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: { apiKey: 'sk-ant-test' },
       });
@@ -168,7 +168,7 @@ describe('ConfigSchema', () => {
           secretKey: 'invalid-key',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: { apiKey: 'sk-ant-test' },
       });
@@ -188,7 +188,7 @@ describe('ConfigSchema', () => {
           host: 'not-a-url',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: { apiKey: 'sk-ant-test' },
       });
@@ -263,6 +263,81 @@ describe('ConfigSchema', () => {
       expect(result.success).toBe(false);
     });
 
+    test('rejects invalid JSON in sessionAuth', () => {
+      const result = ConfigSchema.safeParse({
+        langfuse: {
+          publicKey: 'pk-lf-test',
+          secretKey: 'sk-lf-test',
+        },
+        augment: {
+          sessionAuth: 'not-valid-json',
+        },
+        llm: { apiKey: 'sk-ant-test' },
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    test('rejects sessionAuth missing accessToken', () => {
+      const result = ConfigSchema.safeParse({
+        langfuse: {
+          publicKey: 'pk-lf-test',
+          secretKey: 'sk-lf-test',
+        },
+        augment: {
+          sessionAuth: '{"tenantURL":"https://test.api.augmentcode.com"}',
+        },
+        llm: { apiKey: 'sk-ant-test' },
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    test('rejects sessionAuth missing tenantURL', () => {
+      const result = ConfigSchema.safeParse({
+        langfuse: {
+          publicKey: 'pk-lf-test',
+          secretKey: 'sk-lf-test',
+        },
+        augment: {
+          sessionAuth: '{"accessToken":"test-token"}',
+        },
+        llm: { apiKey: 'sk-ant-test' },
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    test('rejects sessionAuth with invalid tenantURL', () => {
+      const result = ConfigSchema.safeParse({
+        langfuse: {
+          publicKey: 'pk-lf-test',
+          secretKey: 'sk-lf-test',
+        },
+        augment: {
+          sessionAuth: '{"accessToken":"test-token","tenantURL":"not-a-url"}',
+        },
+        llm: { apiKey: 'sk-ant-test' },
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    test('rejects sessionAuth with empty accessToken', () => {
+      const result = ConfigSchema.safeParse({
+        langfuse: {
+          publicKey: 'pk-lf-test',
+          secretKey: 'sk-lf-test',
+        },
+        augment: {
+          sessionAuth: '{"accessToken":"","tenantURL":"https://test.api.augmentcode.com"}',
+        },
+        llm: { apiKey: 'sk-ant-test' },
+      });
+
+      expect(result.success).toBe(false);
+    });
+
     test('rejects missing Anthropic API key', () => {
       const result = ConfigSchema.safeParse({
         langfuse: {
@@ -270,7 +345,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: {},
       });
@@ -285,7 +360,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: { apiKey: 'invalid-key' },
       });
@@ -304,7 +379,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: { apiKey: 'sk-ant-test' },
         nodeEnv: 'invalid',
@@ -320,7 +395,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: { apiKey: 'sk-ant-test' },
         logLevel: 'verbose',
@@ -336,7 +411,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {
-          sessionAuth: '{"accessToken":"test"}',
+          sessionAuth: '{"accessToken":"test","tenantURL":"https://test.api.augmentcode.com"}',
         },
         llm: {
           provider: 'gemini',
