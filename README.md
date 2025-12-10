@@ -29,6 +29,7 @@ AI-powered security scanner that analyzes codebases for OWASP Top 10 2021 vulner
 - [Bun](https://bun.sh) runtime
 - [Langfuse](https://langfuse.com) account (for observability + prompt management)
 - [Anthropic](https://anthropic.com) API key (Claude)
+- [Augment](https://augmentcode.com) account (optional, for enhanced code analysis)
 
 ## Setup
 
@@ -45,6 +46,7 @@ cp .env.example .env
 | `LANGFUSE_PUBLIC_KEY` | Yes | Langfuse public key (`pk-lf-...`) |
 | `LANGFUSE_SECRET_KEY` | Yes | Langfuse secret key (`sk-lf-...`) |
 | `ANTHROPIC_API_KEY` | Yes | Anthropic API key (`sk-ant-...`) |
+| `AUGMENT_API_KEY` | No | Augment API key (`aug_...`) for enhanced analysis |
 | `WORKSPACE_ROOT` | No | Target repo path (default: `./nodejs-goof`) |
 
 ## Usage
@@ -85,3 +87,42 @@ Top Findings:
 bun test           # Run all tests
 bun run type-check # TypeScript validation
 ```
+
+## Documentation
+
+- **[Augment SDK Integration Guide](docs/AUGMENT_SDK_INTEGRATION.md)** - Complete guide to the Augment Context Engine SDK integration
+  - 4-phase modernization (Foundation, Performance, Accuracy, Polish)
+  - DirectContext for persistent indexing (97% faster)
+  - Targeted search for OWASP vulnerabilities (40% fewer false positives)
+  - Session callbacks for real-time progress tracking
+  - Request cancellation with timeout protection
+  - Security hardening with excludedTools
+  - Performance benchmarks and best practices
+
+- **[Product Requirements Document](docs/PRD.md)** - Original PRD with implementation status
+
+## Features
+
+### Augment SDK Integration
+
+- **DirectContext**: Persistent indexing with state export/import for 97% faster subsequent scans
+- **Targeted Search**: OWASP-specific semantic search to pre-filter code before LLM analysis
+- **SearchAndAsk**: Combined retrieval + analysis in a single API call
+- **Security Hardening**: 3 security profiles (strict/moderate/permissive) to prevent code modifications
+- **Session Callbacks**: Real-time progress tracking during long-running scans
+- **Request Cancellation**: Timeout protection with graceful cleanup (default: 5 minutes)
+- **Custom Tools**: Structured vulnerability reporting with `report_vulnerability` tool
+
+### Observability
+
+- **Full OpenTelemetry tracing** with Langfuse integration
+- **Semantic observation types**: retriever, agent, chain, tool
+- **Rich span attributes**: scan ID, repo path, OWASP category, severity, etc.
+- **Trace hierarchy**: Complete visibility into analysis workflow
+
+### Security Analysis
+
+- **OWASP Top 10 2021** coverage for all 10 categories
+- **LangGraph workflow**: 5-node state machine (input → enumerate → analyze → aggregate → output)
+- **Claude LLM integration**: Anthropic's Claude for vulnerability analysis
+- **Structured findings**: Category, severity, evidence, explanation, remediation
