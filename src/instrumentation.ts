@@ -33,6 +33,10 @@
  *         │   └── Retriever: search_code (from @langfuse/tracing)
  *         │       └── Span: tool.search_code (from @langfuse/otel)
  *         ├── Span: node.analyze (from @langfuse/otel)
+ *         │   ├── Tool: tool.targeted_search (from @langfuse/tracing)
+ *         │   │   └── Span: targeted_search.search (from @langfuse/otel)
+ *         │   ├── Tool: tool.direct_context_search (from @langfuse/tracing)
+ *         │   │   └── Span: direct_context.search (from @langfuse/otel)
  *         │   └── Generation: analyze_injection (from @langfuse/tracing)
  *         │       └── Chain: prompt.owasp-A03-analysis (from @langfuse/tracing)
  *         └── Span: node.aggregate (from @langfuse/otel)
@@ -42,12 +46,45 @@
  *
  * - Use `tracer.startActiveSpan()` for general timing and error tracking
  * - Use `withGeneration()` for LLM calls (tracks model, tokens, costs)
- * - Use `withTool()` for Auggie SDK tool invocations
+ * - Use `withTool()` for tool invocations (API calls, SDK operations, external functions)
+ *   - Examples: DirectContext operations, Auggie SDK calls, file I/O, index operations
+ *   - Captures: input parameters, output results, scan context, error states
  * - Use `withRetriever()` for code search and file content retrieval
  * - Use `withChain()` for prompt loading and data transformation
  * - Use `withAgent()` for graph orchestration
  *
  * See src/observability/index.ts for the typed observation wrappers.
+ *
+ * ### Tool Observation Pattern
+ *
+ * All tool-like operations (API calls, SDK invocations, file operations) should use
+ * the `withTool()` wrapper to ensure proper observability:
+ *
+ * ```typescript
+ * import { withTool } from '../observability';
+ *
+ * export async function searchForVulnerabilities(
+ *   context: DirectContext,
+ *   category: OwaspCategory,
+ *   scanId: string,
+ *   repoPath?: string
+ * ): Promise<SearchResult> {
+ *   return withTool(
+ *     'tool.targeted_search',
+ *     async () => {
+ *       // Tool implementation with OpenTelemetry spans for granular timing
+ *       return tracer.startActiveSpan('targeted_search.search', async (span) => {
+ *         // ... implementation ...
+ *       });
+ *     },
+ *     {
+ *       input: { category, searchQuery, maxOutputLength },
+ *       scanContext: { scanId, owaspCategory: category, repoPath },
+ *       metadata: { toolName: 'targeted_search', operation: 'search' },
+ *     }
+ *   );
+ * }
+ * ```
  */
 import { LangfuseSpanProcessor } from '@langfuse/otel';
 import { trace } from '@opentelemetry/api';
