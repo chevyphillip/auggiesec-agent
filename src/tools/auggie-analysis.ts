@@ -42,13 +42,13 @@ interface AuggieCredentials {
 }
 
 /**
- * Get Auggie credentials from config or environment variables (fallback)
+ * Get Auggie credentials from validated config
+ * All env vars must flow through loadConfig() - no direct process.env access
  * Supports both AUGMENT_SESSION_AUTH (full JSON) and separated token/URL
- * @param config - Optional validated config from loadConfig()
+ * @param config - Validated config from loadConfig()
  */
-function getAuggieCredentials(config?: AuggieConfig): AuggieCredentials {
-  // Use validated config if provided, fallback to env vars
-  const sessionAuth = config?.augment?.sessionAuth ?? process.env.AUGMENT_SESSION_AUTH;
+function getAuggieCredentials(config: AuggieConfig): AuggieCredentials {
+  const sessionAuth = config.augment?.sessionAuth;
   if (sessionAuth) {
     try {
       const parsed = JSON.parse(sessionAuth);
@@ -64,10 +64,9 @@ function getAuggieCredentials(config?: AuggieConfig): AuggieCredentials {
     }
   }
 
-  // Fallback to separated token/URL from config or env vars
   return {
-    apiKey: config?.augment?.apiToken ?? process.env.AUGMENT_API_TOKEN,
-    apiUrl: config?.augment?.apiUrl ?? process.env.AUGMENT_API_URL,
+    apiKey: config.augment?.apiToken,
+    apiUrl: config.augment?.apiUrl,
   };
 }
 
@@ -80,8 +79,8 @@ export interface AuggieAnalysisOptions {
   scanId: string;
   /** Model to use (default: sonnet4.5) */
   model?: AuggieModel;
-  /** Optional validated config from loadConfig() */
-  config?: AuggieConfig;
+  /** Validated config from loadConfig() */
+  config: AuggieConfig;
 }
 
 /**

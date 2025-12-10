@@ -42,12 +42,12 @@ interface DirectContextCredentials {
 }
 
 /**
- * Get DirectContext credentials from config or environment variables (fallback)
- * @param config - Optional validated config from loadConfig()
+ * Get DirectContext credentials from validated config
+ * All env vars must flow through loadConfig() - no direct process.env access
+ * @param config - Validated config from loadConfig()
  */
-function getDirectContextCredentials(config?: DirectContextConfig): DirectContextCredentials {
-  // Use validated config if provided
-  const sessionAuth = config?.augment?.sessionAuth ?? process.env.AUGMENT_SESSION_AUTH;
+function getDirectContextCredentials(config: DirectContextConfig): DirectContextCredentials {
+  const sessionAuth = config.augment?.sessionAuth;
   if (sessionAuth) {
     try {
       const parsed = JSON.parse(sessionAuth);
@@ -62,10 +62,9 @@ function getDirectContextCredentials(config?: DirectContextConfig): DirectContex
     }
   }
 
-  // Fallback to separated token/URL from config or env vars
   return {
-    apiKey: config?.augment?.apiToken ?? process.env.AUGMENT_API_TOKEN,
-    apiUrl: config?.augment?.apiUrl ?? process.env.AUGMENT_API_URL,
+    apiKey: config.augment?.apiToken,
+    apiUrl: config.augment?.apiUrl,
   };
 }
 
@@ -118,19 +117,18 @@ async function readDirectoryFiles(dirPath: string): Promise<File[]> {
 /**
  * Create or restore a DirectContext instance
  *
+ * @param config - Validated config from loadConfig()
  * @param stateFilePath - Optional path to saved state file
- * @param config - Optional validated config from loadConfig()
  * @returns DirectContext instance
  */
 export async function createDirectContext(
-  stateFilePath?: string,
-  config?: DirectContextConfig
+  config: DirectContextConfig,
+  stateFilePath?: string
 ): Promise<DirectContext> {
   return tracer.startActiveSpan('direct_context.create', async (span) => {
     try {
       const credentials = getDirectContextCredentials(config);
-      const nodeEnv = config?.nodeEnv ?? process.env.NODE_ENV;
-      const isDebug = nodeEnv === 'development';
+      const isDebug = config.nodeEnv === 'development';
       let context: DirectContext;
 
       if (stateFilePath) {

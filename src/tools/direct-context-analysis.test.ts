@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { DirectContext as DirectContextType } from '@augmentcode/auggie-sdk';
+import type { DirectContextConfig } from './direct-context-analysis';
 
 // Create mock DirectContext instance
 const mockDirectContext: Partial<DirectContextType> = {
@@ -18,7 +19,6 @@ const mockDirectContext: Partial<DirectContextType> = {
 };
 
 // Mock the SDK module before importing the module under test
-// Note: Bun's mock.module requires the module to be installed
 const mockCreate = mock(() => Promise.resolve(mockDirectContext as DirectContextType));
 const mockImportFromFile = mock(() => Promise.resolve(mockDirectContext as DirectContextType));
 
@@ -51,6 +51,17 @@ import {
   searchForVulnerabilities,
 } from './direct-context-analysis';
 
+// Default test config - all tests must pass validated config
+const defaultTestConfig: DirectContextConfig = {
+  augment: {
+    apiToken: 'test-token',
+    apiUrl: 'https://test.api.com',
+    sessionAuth: undefined,
+    apiKey: undefined,
+  },
+  nodeEnv: 'test',
+};
+
 describe('DirectContext Analysis', () => {
   beforeEach(() => {
     // Reset all mocks before each test
@@ -69,7 +80,7 @@ describe('DirectContext Analysis', () => {
 
   describe('createDirectContext', () => {
     test('creates a new DirectContext instance when no state file provided', async () => {
-      const context = await createDirectContext();
+      const context = await createDirectContext(defaultTestConfig);
 
       expect(context).toBeDefined();
       expect(mockCreate).toHaveBeenCalledTimes(1);
@@ -78,7 +89,7 @@ describe('DirectContext Analysis', () => {
 
     test('imports from file when state file path provided', async () => {
       const stateFilePath = '/path/to/state.json';
-      const context = await createDirectContext(stateFilePath);
+      const context = await createDirectContext(defaultTestConfig, stateFilePath);
 
       expect(context).toBeDefined();
       expect(mockImportFromFile).toHaveBeenCalledTimes(1);
@@ -89,30 +100,30 @@ describe('DirectContext Analysis', () => {
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
-    test('uses config credentials when provided', async () => {
-      const config = {
+    test('uses config credentials', async () => {
+      const config: DirectContextConfig = {
         augment: {
-          apiToken: 'test-token',
-          apiUrl: 'https://test.api.com',
+          apiToken: 'custom-token',
+          apiUrl: 'https://custom.api.com',
           sessionAuth: undefined,
           apiKey: undefined,
         },
-        nodeEnv: 'test' as const,
+        nodeEnv: 'test',
       };
 
-      await createDirectContext(undefined, config);
+      await createDirectContext(config);
 
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          apiKey: 'test-token',
-          apiUrl: 'https://test.api.com',
+          apiKey: 'custom-token',
+          apiUrl: 'https://custom.api.com',
           debug: false,
         })
       );
     });
 
     test('parses sessionAuth JSON when provided in config', async () => {
-      const config = {
+      const config: DirectContextConfig = {
         augment: {
           sessionAuth: JSON.stringify({
             accessToken: 'session-token',
@@ -122,10 +133,10 @@ describe('DirectContext Analysis', () => {
           apiUrl: undefined,
           apiKey: undefined,
         },
-        nodeEnv: 'development' as const,
+        nodeEnv: 'development',
       };
 
-      await createDirectContext(undefined, config);
+      await createDirectContext(config);
 
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -135,13 +146,37 @@ describe('DirectContext Analysis', () => {
         })
       );
     });
+
+    test('enables debug mode when nodeEnv is development', async () => {
+      const config: DirectContextConfig = {
+        augment: { apiToken: 'token' },
+        nodeEnv: 'development',
+      };
+
+      await createDirectContext(config);
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ debug: true })
+      );
+    });
+
+    test('disables debug mode when nodeEnv is production', async () => {
+      const config: DirectContextConfig = {
+        augment: { apiToken: 'token' },
+        nodeEnv: 'production',
+      };
+
+      await createDirectContext(config);
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ debug: false })
+      );
+    });
   });
 
   describe('indexRepository', () => {
     test('indexes repository files and returns count', async () => {
-      const context = await createDirectContext();
-      // indexRepository reads files from the repo path, which may not exist in test
-      // We're verifying it doesn't crash and uses the mock
+      const context = await createDirectContext(defaultTestConfig);
       const result = await indexRepository(context, '.', 'scan-123');
 
       expect(result).toBeGreaterThanOrEqual(0);
@@ -150,7 +185,7 @@ describe('DirectContext Analysis', () => {
 
   describe('searchForVulnerabilities', () => {
     test('searches for injection vulnerabilities', async () => {
-      const context = await createDirectContext();
+      const context = await createDirectContext(defaultTestConfig);
       const result = await searchForVulnerabilities(
         context,
         'A03:2021-Injection',
@@ -163,7 +198,7 @@ describe('DirectContext Analysis', () => {
     });
 
     test('searches for broken access control vulnerabilities', async () => {
-      const context = await createDirectContext();
+      const context = await createDirectContext(defaultTestConfig);
       const result = await searchForVulnerabilities(
         context,
         'A01:2021-Broken Access Control',
@@ -177,7 +212,7 @@ describe('DirectContext Analysis', () => {
 
   describe('exportContextState', () => {
     test('exports state to file', async () => {
-      const context = await createDirectContext();
+      const context = await createDirectContext(defaultTestConfig);
       const stateFilePath = '/path/to/export-state.json';
 
       await exportContextState(context, stateFilePath);
