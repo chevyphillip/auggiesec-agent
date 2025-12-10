@@ -49,16 +49,12 @@ interface DirectContextCredentials {
 function getDirectContextCredentials(config: DirectContextConfig): DirectContextCredentials {
   const sessionAuth = config.augment?.sessionAuth;
   if (sessionAuth) {
-    try {
-      const parsed = JSON.parse(sessionAuth);
-      if (parsed.accessToken && parsed.tenantURL) {
-        return {
-          apiKey: parsed.accessToken,
-          apiUrl: parsed.tenantURL,
-        };
-      }
-    } catch {
-      console.warn('[direct-context] Failed to parse AUGMENT_SESSION_AUTH');
+    // sessionAuth is already parsed by Zod as an object
+    if (sessionAuth.accessToken && sessionAuth.tenantURL) {
+      return {
+        apiKey: sessionAuth.accessToken,
+        apiUrl: sessionAuth.tenantURL,
+      };
     }
   }
 
