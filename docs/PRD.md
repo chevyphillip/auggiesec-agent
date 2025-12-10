@@ -212,8 +212,7 @@ Each run should:
 | Phase 1 | ✅ COMPLETE | Skeleton, Bun setup, observability wiring |
 | Phase 2 | ✅ COMPLETE | OpenTelemetry + Langfuse instrumentation |
 | Phase 3 | ✅ COMPLETE | LangGraph agent scaffold |
-| Phase 4 | 🔄 NEXT | Auggie + Tools + OWASP rules |
-| Phase 5 | ⏳ NOT STARTED | CLI & Testing with nodejs-goof |
+| Phase 4 | ✅ COMPLETE | Auggie + Tools + OWASP rules |
 
 ### 8.1 Phase 1: Skeleton, Bun setup, observability wiring ✅ COMPLETE
 
@@ -256,23 +255,22 @@ Each run should:
 - `src/graph/index.ts` - Graph assembly + `runSecurityAnalysis()`
 - `src/graph/*.test.ts` - Comprehensive test coverage
 
-### 8.4 Phase 4: Auggie + Tools + OWASP Rules 🔄 NEXT
+### 8.4 Phase 4: Auggie + Tools + OWASP Rules ✅ COMPLETE
 
-- Create OWASP analysis prompts in **Langfuse Prompt Management** (paraphrased, not copied) for each Top 10 2021 category.[web:2]
-- Implement Auggie SDK wrapper tools for code search and file inspection.[web:3][web:4]
-- Wire LLM (Anthropic/OpenAI) to analysis node
-- Implement per-category analysis or single "all-OWASP" analysis node
-- Map raw agent findings into normalized vulnerability data model
-- Load prompts at runtime via Langfuse `getPrompt()` API
+- Created OWASP analysis prompts in **Langfuse Prompt Management** (paraphrased, not copied) for each Top 10 2021 category.[web:2]
+- Implemented Auggie SDK wrapper for code analysis via `@anthropic-ai/sdk`.[web:3][web:4]
+- Wired Claude (Anthropic) LLM to analysis node with tool calling support
+- Implemented per-category OWASP analysis with `report_vulnerability` tool
+- Mapped raw agent findings into normalized `SecurityFinding` data model
+- Load prompts at runtime via Langfuse `getPrompt()` API with fallback support
+- Full Langfuse observability with semantic observation types (retriever, agent, chain, tool)
 
-### 8.5 Phase 5: CLI & Testing with `nodejs-goof`
-
-- Clone `nodejs-goof` and run multiple scans using Bun scripts.[web:1][web:6]
-- Validate that:
-  - Common vulnerabilities are discovered and correctly categorized.
-  - Langfuse traces show the full chain of reasoning.
-- Adjust prompts, tools, and LangGraph flow for better precision/recall.[web:5][file:1]
-- Create CLI with argument parsing (`bun run scan`)
+**Deliverables:**
+- `src/tools/auggie-analysis.ts` - Auggie SDK wrapper with Claude integration
+- `src/tools/langfuse-prompts.ts` - Langfuse prompt loading utilities
+- `src/tools/report-vulnerability.ts` - Tool for structured vulnerability reporting
+- `src/tools/index.ts` - Tool exports
+- `src/observability/index.ts` - Enhanced observability wrappers (withAgent, withTool, etc.)
 
 ---
 

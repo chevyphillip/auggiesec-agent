@@ -4,7 +4,7 @@
  * Provides utilities to fetch and cache OWASP analysis prompts from Langfuse.
  * Prompts are versioned and labeled in Langfuse Prompt Management.
  *
- * Uses 'chain' observation type for prompt loading/compilation to track:
+ * Uses 'retriever' observation type for prompt loading to track:
  * - Prompt name, label, version
  * - Compilation variables
  * - Fallback usage
@@ -56,7 +56,7 @@ export interface CompiledPrompt {
 /**
  * Fetch a prompt from Langfuse with fallback support
  *
- * Uses 'chain' observation type to track prompt loading in Langfuse dashboard
+ * Uses 'retriever' observation type to track prompt retrieval in Langfuse dashboard
  * with rich metadata about prompt name, version, label, and variables.
  *
  * @param config - Prompt configuration (name, optional label/version)
@@ -163,7 +163,7 @@ export async function getPrompt(
         }
       });
     },
-    { asType: 'chain' }
+    { asType: 'retriever' }
   );
 }
 
