@@ -17,7 +17,7 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@augmentcode/auggie-sdk": "^0.1.9",
+    "@augmentcode/auggie-sdk": "^0.1.10",
     "@langchain/anthropic": "^1.2.3",
     "@langchain/core": "^1.1.4",
     "@langchain/langgraph": "^1.0.4",
