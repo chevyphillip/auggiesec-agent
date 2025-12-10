@@ -25,7 +25,8 @@ import { tracer } from '../instrumentation';
 import { withAgent } from '../observability';
 import { getOwaspPrompt } from './langfuse-prompts';
 import {
-    clearFindings
+    clearFindings,
+    reportVulnerabilityTool
 } from './report-vulnerability';
 
 export type AuggieModel = 'haiku4.5' | 'sonnet4.5' | 'sonnet4' | 'gpt5';
@@ -200,18 +201,16 @@ export async function analyzeWithAuggie(
             );
 
             // Initialize Auggie with the repository and credentials
-            // Note: Custom tools temporarily disabled due to @mastra/mcp dependency issue
-            // The SDK's MCP server requires @mastra/core/base which has version conflicts
-            // TODO: Re-enable custom tools once SDK dependency issue is resolved
             client = await Auggie.create({
               workspaceRoot: repoPath,
               model,
               // Pass credentials explicitly (SDK also reads from env vars as fallback)
               ...(credentials.apiKey && { apiKey: credentials.apiKey }),
               ...(credentials.apiUrl && { apiUrl: credentials.apiUrl }),
-              // tools: {
-              //   report_vulnerability: reportVulnerabilityTool,
-              // },
+              // Custom tools for structured vulnerability reporting
+              tools: {
+                report_vulnerability: reportVulnerabilityTool,
+              },
             });
 
             // Build the analysis prompt - ask for structured JSON output
