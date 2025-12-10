@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { ConfigSchema } from './config';
 
 // Store original environment
@@ -16,7 +16,7 @@ describe('ConfigSchema', () => {
   });
 
   describe('valid configuration', () => {
-    test('accepts valid Langfuse credentials', () => {
+    test('accepts valid Langfuse and Anthropic credentials', () => {
       const result = ConfigSchema.safeParse({
         langfuse: {
           publicKey: 'pk-lf-test123',
@@ -24,13 +24,16 @@ describe('ConfigSchema', () => {
           host: 'https://cloud.langfuse.com',
         },
         augment: {},
-        llm: {},
+        llm: {
+          apiKey: 'sk-ant-test789',
+        },
       });
 
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.langfuse.publicKey).toBe('pk-lf-test123');
         expect(result.data.langfuse.secretKey).toBe('sk-lf-test456');
+        expect(result.data.llm.apiKey).toBe('sk-ant-test789');
       }
     });
 
@@ -41,7 +44,9 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {},
-        llm: {},
+        llm: {
+          apiKey: 'sk-ant-test',
+        },
       });
 
       expect(result.success).toBe(true);
@@ -51,6 +56,7 @@ describe('ConfigSchema', () => {
         expect(result.data.nodeEnv).toBe('development');
         expect(result.data.logLevel).toBe('info');
         expect(result.data.llm.provider).toBe('anthropic');
+        expect(result.data.llm.model).toBe('claude-sonnet-4-5-20250929');
       }
     });
 
@@ -63,7 +69,9 @@ describe('ConfigSchema', () => {
         augment: {
           apiKey: 'aug_test789',
         },
-        llm: {},
+        llm: {
+          apiKey: 'sk-ant-test',
+        },
       });
 
       expect(result.success).toBe(true);
@@ -72,7 +80,7 @@ describe('ConfigSchema', () => {
       }
     });
 
-    test('accepts optional LLM API key', () => {
+    test('accepts custom LLM model', () => {
       const result = ConfigSchema.safeParse({
         langfuse: {
           publicKey: 'pk-lf-test',
@@ -80,15 +88,17 @@ describe('ConfigSchema', () => {
         },
         augment: {},
         llm: {
-          provider: 'openai',
-          apiKey: 'sk-openai-test',
+          provider: 'anthropic',
+          apiKey: 'sk-ant-test',
+          model: 'claude-opus-4-5-20251101',
         },
       });
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.llm.provider).toBe('openai');
-        expect(result.data.llm.apiKey).toBe('sk-openai-test');
+        expect(result.data.llm.provider).toBe('anthropic');
+        expect(result.data.llm.apiKey).toBe('sk-ant-test');
+        expect(result.data.llm.model).toBe('claude-opus-4-5-20251101');
       }
     });
   });
@@ -100,7 +110,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {},
-        llm: {},
+        llm: { apiKey: 'sk-ant-test' },
       });
 
       expect(result.success).toBe(false);
@@ -112,7 +122,7 @@ describe('ConfigSchema', () => {
           publicKey: 'pk-lf-test',
         },
         augment: {},
-        llm: {},
+        llm: { apiKey: 'sk-ant-test' },
       });
 
       expect(result.success).toBe(false);
@@ -125,7 +135,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {},
-        llm: {},
+        llm: { apiKey: 'sk-ant-test' },
       });
 
       expect(result.success).toBe(false);
@@ -142,7 +152,7 @@ describe('ConfigSchema', () => {
           secretKey: 'invalid-key',
         },
         augment: {},
-        llm: {},
+        llm: { apiKey: 'sk-ant-test' },
       });
 
       expect(result.success).toBe(false);
@@ -160,7 +170,7 @@ describe('ConfigSchema', () => {
           host: 'not-a-url',
         },
         augment: {},
-        llm: {},
+        llm: { apiKey: 'sk-ant-test' },
       });
 
       expect(result.success).toBe(false);
@@ -175,10 +185,40 @@ describe('ConfigSchema', () => {
         augment: {
           apiKey: 'invalid-key',
         },
+        llm: { apiKey: 'sk-ant-test' },
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    test('rejects missing Anthropic API key', () => {
+      const result = ConfigSchema.safeParse({
+        langfuse: {
+          publicKey: 'pk-lf-test',
+          secretKey: 'sk-lf-test',
+        },
+        augment: {},
         llm: {},
       });
 
       expect(result.success).toBe(false);
+    });
+
+    test('rejects invalid Anthropic API key prefix', () => {
+      const result = ConfigSchema.safeParse({
+        langfuse: {
+          publicKey: 'pk-lf-test',
+          secretKey: 'sk-lf-test',
+        },
+        augment: {},
+        llm: { apiKey: 'invalid-key' },
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const formatted = result.error.format();
+        expect(formatted.llm?.apiKey?._errors).toBeDefined();
+      }
     });
 
     test('rejects invalid nodeEnv value', () => {
@@ -188,7 +228,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {},
-        llm: {},
+        llm: { apiKey: 'sk-ant-test' },
         nodeEnv: 'invalid',
       });
 
@@ -202,7 +242,7 @@ describe('ConfigSchema', () => {
           secretKey: 'sk-lf-test',
         },
         augment: {},
-        llm: {},
+        llm: { apiKey: 'sk-ant-test' },
         logLevel: 'verbose',
       });
 
@@ -218,6 +258,7 @@ describe('ConfigSchema', () => {
         augment: {},
         llm: {
           provider: 'gemini',
+          apiKey: 'sk-ant-test',
         },
       });
 

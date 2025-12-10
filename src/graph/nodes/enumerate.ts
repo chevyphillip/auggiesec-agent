@@ -1,7 +1,6 @@
-import { SpanStatusCode } from '@opentelemetry/api';
+import { startActiveObservation } from '@langfuse/tracing';
 import * as fs from 'fs';
 import * as path from 'path';
-import { tracer } from '../../instrumentation';
 import type { AnalysisTarget, SecurityAnalysisState } from '../state';
 
 /**
@@ -139,11 +138,21 @@ function generateTargetMetadata(relativePath: string): Record<string, string> {
 export async function enumerateTargetsNode(
   state: SecurityAnalysisState
 ): Promise<Partial<SecurityAnalysisState>> {
-  return tracer.startActiveSpan('node.enumerate_targets', async (span) => {
-    try {
-      span.setAttributes({
-        'scan.id': state.scanId,
-        'repo.path': state.repoPath,
+  return startActiveObservation(
+    'node.enumerate_targets',
+    async (obs) => {
+      // Capture input state for Langfuse tracing (retriever type for file discovery)
+      obs.update({
+        input: {
+          query: `Enumerate security-relevant files in ${state.repoPath}`,
+          scanId: state.scanId,
+          repoPath: state.repoPath,
+        },
+        metadata: {
+          nodeType: 'enumerate',
+          phase: 'target_discovery',
+          retrievalType: 'filesystem',
+        },
       });
 
       console.log(`[enumerate] Enumerating targets in ${state.repoPath}`);
@@ -154,9 +163,10 @@ export async function enumerateTargetsNode(
       // Check if the repository exists
       if (!fs.existsSync(absoluteRepoPath)) {
         console.warn(`[enumerate] Repository path does not exist: ${absoluteRepoPath}`);
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: `Repository path does not exist: ${absoluteRepoPath}`,
+        obs.update({
+          output: { targets: [], error: `Repository path does not exist: ${absoluteRepoPath}` },
+          level: 'ERROR',
+          statusMessage: `Repository path does not exist: ${absoluteRepoPath}`,
         });
         return { targets: [] };
       }
@@ -184,33 +194,34 @@ export async function enumerateTargetsNode(
 
       targets.sort((a, b) => priorityOrder[a.type] - priorityOrder[b.type]);
 
-      span.setAttributes({
-        'targets.count': targets.length,
-        'targets.routes': targets.filter((t) => t.type === 'route').length,
-        'targets.controllers': targets.filter((t) => t.type === 'controller').length,
-        'targets.files': targets.filter((t) => t.type === 'file').length,
-        'targets.dependencies': targets.filter((t) => t.type === 'dependency').length,
-      });
+      // Calculate target breakdown
+      const breakdown = {
+        routes: targets.filter((t) => t.type === 'route').length,
+        controllers: targets.filter((t) => t.type === 'controller').length,
+        files: targets.filter((t) => t.type === 'file').length,
+        dependencies: targets.filter((t) => t.type === 'dependency').length,
+      };
 
-      span.setStatus({ code: SpanStatusCode.OK });
       console.log(`[enumerate] Found ${targets.length} targets`);
       console.log(
-        `[enumerate] Breakdown: ${targets.filter((t) => t.type === 'route').length} routes, ` +
-          `${targets.filter((t) => t.type === 'controller').length} controllers, ` +
-          `${targets.filter((t) => t.type === 'file').length} files, ` +
-          `${targets.filter((t) => t.type === 'dependency').length} dependencies`
+        `[enumerate] Breakdown: ${breakdown.routes} routes, ` +
+          `${breakdown.controllers} controllers, ` +
+          `${breakdown.files} files, ` +
+          `${breakdown.dependencies} dependencies`
       );
 
-      return { targets };
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
+      // Capture output for Langfuse tracing
+      obs.update({
+        output: {
+          targetCount: targets.length,
+          breakdown,
+          // Include sample of target paths (not full list to avoid bloat)
+          samplePaths: targets.slice(0, 10).map((t) => t.metadata?.relativePath ?? t.path),
+        },
       });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
+
+      return { targets };
+    },
+    { asType: 'retriever' }
+  );
 }

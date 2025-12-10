@@ -1,5 +1,5 @@
-import { tracer } from '../../instrumentation';
-import type { SecurityAnalysisState, GraphStatus } from '../state';
+import { startActiveObservation } from '@langfuse/tracing';
+import type { GraphStatus, SecurityAnalysisState } from '../state';
 
 /**
  * Output node - finalizes the scan and returns results
@@ -12,18 +12,26 @@ import type { SecurityAnalysisState, GraphStatus } from '../state';
 export async function outputNode(
   state: SecurityAnalysisState
 ): Promise<Partial<SecurityAnalysisState>> {
-  return tracer.startActiveSpan('node.output', async (span) => {
-    try {
+  return startActiveObservation(
+    'node.output',
+    async (obs) => {
+      // Capture input state for Langfuse tracing
+      obs.update({
+        input: {
+          scanId: state.scanId,
+          findingsCount: state.findings.length,
+          errorsCount: state.errors.length,
+          hasSummary: !!state.summary,
+        },
+        metadata: {
+          nodeType: 'output',
+          phase: 'finalization',
+        },
+      });
+
       const completedAt = new Date().toISOString();
       const hasErrors = state.errors.length > 0;
       const status: GraphStatus = hasErrors ? 'failed' : 'completed';
-
-      span.setAttributes({
-        'scan.id': state.scanId,
-        'scan.status': status,
-        'findings.count': state.findings.length,
-        'errors.count': state.errors.length,
-      });
 
       console.log(`[output] Scan ${state.scanId} ${status}`);
       console.log(`[output] Total findings: ${state.findings.length}`);
@@ -32,12 +40,19 @@ export async function outputNode(
         console.log(`[output] Errors: ${state.errors.join(', ')}`);
       }
 
-      return {
+      const result = {
         status,
         completedAt,
       };
-    } finally {
-      span.end();
-    }
-  });
+
+      // Capture output for Langfuse tracing
+      obs.update({
+        output: result,
+        level: hasErrors ? 'WARNING' : 'DEFAULT',
+      });
+
+      return result;
+    },
+    { asType: 'span' }
+  );
 }

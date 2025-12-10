@@ -127,7 +127,12 @@ The first target application under test will be `nodejs-goof`, a deliberately vu
   - Category names and descriptions.
   - Typical vulnerability patterns and examples relevant to Node.js / web apps.
   - Remediation guidance.[web:2]
-- OWASP content must be referenced and paraphrased in prompts and rule files (no direct copying of copyrighted text).
+- OWASP content must be referenced and paraphrased in prompts (no direct copying of copyrighted text).
+- **Prompt Storage**: OWASP analysis prompts are stored and versioned in **Langfuse Prompt Management** rather than local `src/rules/*.ts` files. This enables:
+  - Hot-swappable prompts without code redeploy
+  - Version control with labels (`production`, `staging`)
+  - A/B testing of prompt variations
+  - Performance tracking per prompt version
 
 ### 6.2 Analysis workflow
 
@@ -253,11 +258,12 @@ Each run should:
 
 ### 8.4 Phase 4: Auggie + Tools + OWASP Rules 🔄 NEXT
 
-- Create OWASP rule prompts and rule markdown files (paraphrased, not copied) for each Top 10 2021 category.[web:2]
+- Create OWASP analysis prompts in **Langfuse Prompt Management** (paraphrased, not copied) for each Top 10 2021 category.[web:2]
 - Implement Auggie SDK wrapper tools for code search and file inspection.[web:3][web:4]
 - Wire LLM (Anthropic/OpenAI) to analysis node
 - Implement per-category analysis or single "all-OWASP" analysis node
 - Map raw agent findings into normalized vulnerability data model
+- Load prompts at runtime via Langfuse `getPrompt()` API
 
 ### 8.5 Phase 5: CLI & Testing with `nodejs-goof`
 
@@ -284,6 +290,16 @@ Each run should:
 - Augment account and `auggie` CLI installed and configured with API key and workspace pointing to the `nodejs-goof` repo.[web:3]
 - LLM provider credentials (API keys).
 - Local environment with **Bun** installed and configured as the JS runtime and package manager.[web:6]
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LANGFUSE_PUBLIC_KEY` | Yes | Langfuse public key (starts with `pk-lf-`) |
+| `LANGFUSE_SECRET_KEY` | Yes | Langfuse secret key (starts with `sk-lf-`) |
+| `LANGFUSE_BASE_URL` | No | Langfuse host URL. Default: `https://cloud.langfuse.com`. Use `https://us.cloud.langfuse.com` for US region. |
+| `AUGMENT_API_KEY` | Phase 4+ | Augment API key (starts with `aug_`) |
+| `ANTHROPIC_API_KEY` | Phase 4+ | Anthropic API key (starts with `sk-ant-`) |
 
 ---
 

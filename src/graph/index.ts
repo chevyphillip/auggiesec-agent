@@ -1,18 +1,19 @@
-import { StateGraph, END, START } from '@langchain/langgraph';
+import { END, START, StateGraph } from '@langchain/langgraph';
+import { startActiveObservation, updateActiveTrace } from '@langfuse/tracing';
 import { tracer } from '../instrumentation';
 import {
-  SecurityAnalysisStateAnnotation,
-  type GraphInput,
-  type GraphOutput,
-  type SecurityAnalysisState,
-} from './state';
-import {
-  inputNode,
-  enumerateTargetsNode,
-  analyzeNode,
-  aggregateNode,
-  outputNode,
+    aggregateNode,
+    analyzeNode,
+    enumerateTargetsNode,
+    inputNode,
+    outputNode,
 } from './nodes';
+import {
+    SecurityAnalysisStateAnnotation,
+    type GraphInput,
+    type GraphOutput,
+    type SecurityAnalysisState,
+} from './state';
 
 /**
  * Create the security analysis graph
@@ -50,67 +51,101 @@ export function createSecurityAnalysisGraph() {
  * Run a security analysis scan
  *
  * This is the main entry point for executing the graph.
- * It wraps the execution in a top-level trace span.
+ * Uses 'agent' observation type for top-level orchestration tracking.
  */
 export async function runSecurityAnalysis(input: GraphInput): Promise<GraphOutput> {
-  return tracer.startActiveSpan('security_analysis.run', async (span) => {
-    try {
-      const graph = createSecurityAnalysisGraph();
-
-      // Set span attributes for the top-level trace
-      span.setAttributes({
-        'repo.path': input.repoPath ?? './nodejs-goof',
-        'user.query': input.userQuery,
-        'scope.filter': input.scopeFilter ?? 'none',
+  // Use 'agent' observation type for graph orchestration
+  return startActiveObservation(
+    'graphguard_security_analysis',
+    async (agentObs) => {
+      // Set trace-level context for all nested observations
+      updateActiveTrace({
+        name: `graphguard-scan`,
+        tags: ['graphguard', 'owasp', 'security-analysis'],
+        metadata: {
+          repoPath: input.repoPath ?? './nodejs-goof',
+          userQuery: input.userQuery,
+        },
       });
 
-      console.log('[graph] Starting security analysis...');
-
-      // Invoke the graph with input
-      const result = await graph.invoke({
-        repoPath: input.repoPath ?? './nodejs-goof',
-        userQuery: input.userQuery,
-        scopeFilter: input.scopeFilter,
+      // Set agent observation input
+      agentObs.update({
+        input: {
+          repoPath: input.repoPath ?? './nodejs-goof',
+          userQuery: input.userQuery,
+          scopeFilter: input.scopeFilter,
+        },
+        metadata: { agentType: 'security_analysis' },
       });
 
-      // Extract output from final state
-      const state = result as SecurityAnalysisState;
+      return tracer.startActiveSpan('security_analysis.run', async (span) => {
+        try {
+          const graph = createSecurityAnalysisGraph();
 
-      span.setAttributes({
-        'scan.id': state.scanId,
-        'scan.status': state.status,
-        'findings.count': state.findings.length,
+          // Set span attributes for the top-level trace
+          span.setAttributes({
+            'repo.path': input.repoPath ?? './nodejs-goof',
+            'user.query': input.userQuery,
+            'scope.filter': input.scopeFilter ?? 'none',
+          });
+
+          console.log('[graph] Starting security analysis...');
+
+          // Invoke the graph with input
+          const result = await graph.invoke({
+            repoPath: input.repoPath ?? './nodejs-goof',
+            userQuery: input.userQuery,
+            scopeFilter: input.scopeFilter,
+          });
+
+          // Extract output from final state
+          const state = result as SecurityAnalysisState;
+
+          span.setAttributes({
+            'scan.id': state.scanId,
+            'scan.status': state.status,
+            'findings.count': state.findings.length,
+          });
+
+          console.log(`[graph] Analysis complete: ${state.findings.length} findings`);
+
+          const output: GraphOutput = {
+            scanId: state.scanId,
+            status: state.status,
+            findings: state.findings,
+            summary: state.summary ?? '',
+            analyzedCategories: state.analyzedCategories,
+            errors: state.errors,
+            startedAt: state.startedAt,
+            completedAt: state.completedAt,
+          };
+
+          // Update agent observation with output
+          agentObs.update({
+            output: {
+              scanId: state.scanId,
+              status: state.status,
+              findingsCount: state.findings.length,
+              analyzedCategories: state.analyzedCategories,
+            },
+          });
+
+          return output;
+        } catch (error) {
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
+        }
       });
-
-      console.log(`[graph] Analysis complete: ${state.findings.length} findings`);
-
-      return {
-        scanId: state.scanId,
-        status: state.status,
-        findings: state.findings,
-        summary: state.summary ?? '',
-        analyzedCategories: state.analyzedCategories,
-        errors: state.errors,
-        startedAt: state.startedAt,
-        completedAt: state.completedAt,
-      };
-    } catch (error) {
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
+    },
+    { asType: 'agent' }
+  );
 }
 
 // Export types for use in other modules
-export type { GraphInput, GraphOutput } from './state';
 export {
-  SecurityAnalysisStateAnnotation,
-  OWASP_CATEGORIES,
-  type SecurityAnalysisState,
-  type SecurityFinding,
-  type OwaspCategory,
-  type Severity,
-  type AnalysisTarget,
+    OWASP_CATEGORIES, SecurityAnalysisStateAnnotation, type AnalysisTarget, type OwaspCategory, type SecurityAnalysisState,
+    type SecurityFinding, type Severity
 } from './state';
+export type { GraphInput, GraphOutput } from './state';

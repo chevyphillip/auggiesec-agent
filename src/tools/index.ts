@@ -1,35 +1,31 @@
 /**
- * Auggie SDK Tool Wrappers for GraphGuard
+ * GraphGuard Tools Module
  *
- * These tools wrap Auggie SDK functionality for use in LangGraph nodes.
+ * Provides tools for Auggie SDK integration and security analysis.
  * Tools follow the Vercel AI SDK format (ai-sdk compatible).
  *
  * @module tools
  */
 
-// Auggie client
-export {
-    closeAuggieClient, getAuggieClient, getClientConfig, isAuggieClientInitialized
-} from './auggie-client';
-export type { AuggieClientConfig } from './auggie-client';
+// Auggie-based analysis (primary analysis method)
+export { analyzeWithAuggie } from './auggie-analysis';
+export type { AuggieAnalysisOptions, AuggieModel } from './auggie-analysis';
 
-// Tools
-export { analyzeDependenciesTool } from './analyze-dependencies';
-export { getFileContentTool } from './get-file-content';
-export { searchCodeTool } from './search-code';
+// Report vulnerability tool (used by Auggie during analysis)
+export {
+    clearFindings, getAndClearFindings, reportVulnerabilityTool
+} from './report-vulnerability';
+export type { ReportVulnerabilityInput } from './report-vulnerability';
 
 // Langfuse prompt utilities
 export {
-    OWASP_PROMPTS, getLangfuseClient,
+    OWASP_PROMPTS,
+    getLangfuseClient,
     getOwaspPrompt,
     getPrompt
 } from './langfuse-prompts';
-export type { CompiledPrompt, OwaspPromptName, PromptConfig } from './langfuse-prompts';
-
-// Re-export types
 export type {
-    AnalyzeDependenciesInput,
-    AnalyzeDependenciesResult
-} from './analyze-dependencies';
-export type { GetFileContentInput, GetFileContentResult } from './get-file-content';
-export type { SearchCodeInput, SearchCodeResult } from './search-code';
+    CompiledPrompt,
+    OwaspPromptName,
+    PromptConfig
+} from './langfuse-prompts';

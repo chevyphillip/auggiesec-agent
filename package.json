@@ -5,9 +5,9 @@
   "private": true,
   "scripts": {
     "dev": "bun run index.ts",
-    "test": "bun test",
-    "test:watch": "bun test --watch",
-    "test:coverage": "bun test --coverage",
+    "test": "bun test src/",
+    "test:watch": "bun test --watch src/",
+    "test:coverage": "bun test --coverage src/",
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
@@ -23,6 +23,7 @@
     "@langchain/langgraph": "^1.0.4",
     "@langfuse/otel": "^4.4.9",
     "@langfuse/tracing": "^4.4.9",
+    "@mastra/core": "^0.24.6",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/sdk-node": "^0.208.0",
     "ai": "^5.0.108",

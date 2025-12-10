@@ -1,4 +1,4 @@
-import { tracer } from '../../instrumentation';
+import { startActiveObservation } from '@langfuse/tracing';
 import type { SecurityAnalysisState } from '../state';
 
 /**
@@ -12,12 +12,21 @@ import type { SecurityAnalysisState } from '../state';
 export async function aggregateNode(
   state: SecurityAnalysisState
 ): Promise<Partial<SecurityAnalysisState>> {
-  return tracer.startActiveSpan('node.aggregate', async (span) => {
-    try {
-      span.setAttributes({
-        'scan.id': state.scanId,
-        'findings.count': state.findings.length,
-        'categories.analyzed': state.analyzedCategories.length,
+  return startActiveObservation(
+    'node.aggregate',
+    async (obs) => {
+      // Capture input state for Langfuse tracing (chain type for linking findings → summary)
+      obs.update({
+        input: {
+          scanId: state.scanId,
+          findingsCount: state.findings.length,
+          analyzedCategories: state.analyzedCategories,
+        },
+        metadata: {
+          nodeType: 'aggregate',
+          phase: 'report_generation',
+          chainType: 'findings_to_summary',
+        },
       });
 
       console.log(`[aggregate] Aggregating ${state.findings.length} findings`);
@@ -89,11 +98,19 @@ export async function aggregateNode(
 
       console.log(`[aggregate] Generated summary (${summary.length} chars)`);
 
+      // Capture output for Langfuse tracing
+      obs.update({
+        output: {
+          summaryLength: summary.length,
+          bySeverity,
+          byCategory,
+        },
+      });
+
       return {
         summary,
       };
-    } finally {
-      span.end();
-    }
-  });
+    },
+    { asType: 'chain' }
+  );
 }

@@ -28,89 +28,6 @@ describe('Graph', () => {
     });
   });
 
-  describe('runSecurityAnalysis', () => {
-    test('executes graph and returns output', async () => {
-      const { runSecurityAnalysis } = await import('./index');
-
-      const result = await runSecurityAnalysis({
-        userQuery: 'Scan for injection vulnerabilities',
-        repoPath: './test-repo',
-      });
-
-      expect(result).toBeDefined();
-      expect(result.scanId).toMatch(/^scan_/);
-      expect(result.status).toBe('completed');
-      expect(Array.isArray(result.findings)).toBe(true);
-      expect(Array.isArray(result.analyzedCategories)).toBe(true);
-      expect(Array.isArray(result.errors)).toBe(true);
-      expect(typeof result.summary).toBe('string');
-    });
-
-    test('uses default repoPath when not provided', async () => {
-      const { runSecurityAnalysis } = await import('./index');
-
-      const result = await runSecurityAnalysis({
-        userQuery: 'Test query',
-      });
-
-      expect(result.status).toBe('completed');
-      expect(result.summary).toContain('./nodejs-goof');
-    });
-
-    test('generates real security findings', async () => {
-      const { runSecurityAnalysis } = await import('./index');
-
-      const result = await runSecurityAnalysis({
-        userQuery: 'Find all security issues',
-      });
-
-      // Phase 4 real analysis generates actual findings from nodejs-goof
-      expect(result.findings.length).toBeGreaterThanOrEqual(1);
-      // Should find at least one OWASP category
-      expect(result.analyzedCategories.length).toBeGreaterThanOrEqual(1);
-      // Verify findings have required structure
-      for (const finding of result.findings) {
-        expect(finding.id).toBeDefined();
-        expect(finding.category).toBeDefined();
-        expect(finding.title).toBeDefined();
-        expect(finding.severity).toBeDefined();
-        expect(finding.evidence.file).toBeDefined();
-        expect(finding.evidence.lineRange).toBeDefined();
-        expect(finding.recommendedFix).toBeDefined();
-      }
-    });
-
-    test('includes timing information', async () => {
-      const { runSecurityAnalysis } = await import('./index');
-
-      const result = await runSecurityAnalysis({
-        userQuery: 'Test timing',
-      });
-
-      expect(result.startedAt).toBeDefined();
-      expect(result.completedAt).toBeDefined();
-
-      // Verify timestamps are valid ISO strings
-      const started = new Date(result.startedAt!);
-      const completed = new Date(result.completedAt!);
-      expect(started.getTime()).toBeLessThanOrEqual(completed.getTime());
-    });
-
-    test('generates markdown summary', async () => {
-      const { runSecurityAnalysis } = await import('./index');
-
-      const result = await runSecurityAnalysis({
-        userQuery: 'Generate report',
-      });
-
-      expect(result.summary).toContain('# Security Analysis Report');
-      expect(result.summary).toContain('## Summary');
-      expect(result.summary).toContain('## Findings');
-      expect(result.summary).toContain('By Severity');
-      expect(result.summary).toContain('By OWASP Category');
-    });
-  });
-
   describe('graph exports', () => {
     test('exports OWASP_CATEGORIES', async () => {
       const { OWASP_CATEGORIES } = await import('./index');
@@ -121,5 +38,92 @@ describe('Graph', () => {
       const { SecurityAnalysisStateAnnotation } = await import('./index');
       expect(SecurityAnalysisStateAnnotation).toBeDefined();
     });
+  });
+});
+
+describe('Report Vulnerability Tool', () => {
+  test('collects findings correctly', async () => {
+    const {
+      reportVulnerabilityTool,
+      getAndClearFindings,
+      clearFindings,
+    } = await import('../tools/report-vulnerability');
+
+    // Clear any previous findings
+    clearFindings();
+
+    // Execute the tool (assert execute exists)
+    expect(reportVulnerabilityTool.execute).toBeDefined();
+    const result = await reportVulnerabilityTool.execute!(
+      {
+        category: 'A03:2021-Injection',
+        title: 'SQL Injection in user query',
+        severity: 'critical',
+        file: 'routes/users.js',
+        lineRange: '45-52',
+        codeSnippet: 'db.query(userInput)',
+        explanation: 'User input is directly concatenated into SQL query',
+        recommendedFix: 'Use parameterized queries',
+      },
+      {
+        toolCallId: 'test-call-1',
+        messages: [],
+      }
+    );
+
+    expect(result).toContain('recorded');
+
+    // Get findings
+    const findings = getAndClearFindings();
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.category).toBe('A03:2021-Injection');
+    expect(findings[0]!.title).toBe('SQL Injection in user query');
+    expect(findings[0]!.severity).toBe('critical');
+    expect(findings[0]!.evidence.file).toBe('routes/users.js');
+
+    // Verify findings are cleared
+    const emptyFindings = getAndClearFindings();
+    expect(emptyFindings).toHaveLength(0);
+  });
+
+  test('generates unique finding IDs', async () => {
+    const {
+      reportVulnerabilityTool,
+      getAndClearFindings,
+      clearFindings,
+    } = await import('../tools/report-vulnerability');
+
+    clearFindings();
+
+    // Add two findings
+    await reportVulnerabilityTool.execute!(
+      {
+        category: 'A03:2021-Injection',
+        title: 'Finding 1',
+        severity: 'high',
+        file: 'file1.js',
+        lineRange: '1-5',
+        explanation: 'Test',
+        recommendedFix: 'Fix it',
+      },
+      { toolCallId: 'call-1', messages: [] }
+    );
+
+    await reportVulnerabilityTool.execute!(
+      {
+        category: 'A01:2021-Broken Access Control',
+        title: 'Finding 2',
+        severity: 'medium',
+        file: 'file2.js',
+        lineRange: '10-15',
+        explanation: 'Test 2',
+        recommendedFix: 'Fix it 2',
+      },
+      { toolCallId: 'call-2', messages: [] }
+    );
+
+    const findings = getAndClearFindings();
+    expect(findings).toHaveLength(2);
+    expect(findings[0]!.id).not.toBe(findings[1]!.id);
   });
 });

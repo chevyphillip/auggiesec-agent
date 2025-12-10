@@ -3,8 +3,8 @@ import { z } from 'zod';
 /**
  * Configuration schema for OWASP GraphGuard
  *
- * Phase 1: Langfuse keys are REQUIRED
- * Phase 2+: Auggie and LLM keys will be REQUIRED
+ * Phase 1-3: Langfuse keys are REQUIRED
+ * Phase 4+: Anthropic API key is REQUIRED for LLM-based analysis
  */
 const ConfigSchema = z.object({
   langfuse: z.object({
@@ -21,7 +21,10 @@ const ConfigSchema = z.object({
   }),
   llm: z.object({
     provider: z.enum(['anthropic', 'openai']).default('anthropic'),
-    apiKey: z.string().optional(),
+    apiKey: z.string().startsWith('sk-ant-', {
+      message: 'ANTHROPIC_API_KEY must start with "sk-ant-"',
+    }),
+    model: z.string().default('claude-sonnet-4-5-20250929'),
   }),
   workspaceRoot: z.string().default('./nodejs-goof'),
   nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
@@ -46,7 +49,8 @@ export function loadConfig(): Config {
     },
     llm: {
       provider: process.env.LLM_PROVIDER,
-      apiKey: process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY,
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      model: process.env.LLM_MODEL,
     },
     workspaceRoot: process.env.WORKSPACE_ROOT,
     nodeEnv: process.env.NODE_ENV,

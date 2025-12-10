@@ -1,0 +1,4 @@
+[test]
+# Only run tests in src/ directory
+root = "./src"
+
