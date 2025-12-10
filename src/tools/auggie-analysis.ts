@@ -6,20 +6,15 @@
  *
  * ## Authentication
  *
- * The Auggie SDK supports multiple authentication methods:
- * 1. **AUGMENT_SESSION_AUTH** - Full JSON token from `auggie token print`
- *    Format: `{"accessToken":"...","tenantURL":"...","scopes":["read","write"]}`
- * 2. **AUGMENT_API_TOKEN + AUGMENT_API_URL** - Separated credentials
- * 3. **settings.json** - Store credentials in settings.json file
- *
- * This module reads from environment variables and passes them explicitly
- * to ensure credentials are properly loaded from .env files.
+ * Credentials are passed from the centralized config system (src/config.ts).
+ * The config system validates credentials at load time using Zod schemas.
  *
  * @module tools/auggie-analysis
  */
 
-import { Auggie } from '@augmentcode/auggie-sdk';
+import { APIError, Auggie, BlobTooLargeError } from '@augmentcode/auggie-sdk';
 import { SpanStatusCode } from '@opentelemetry/api';
+import type { AugmentCredentials } from '../config';
 import type { OwaspCategory, SecurityFinding } from '../graph/state';
 import { tracer } from '../instrumentation';
 import { withAgent } from '../observability';
@@ -29,41 +24,12 @@ import {
     reportVulnerabilityTool
 } from './report-vulnerability';
 
-export type AuggieModel = 'haiku4.5' | 'sonnet4.5' | 'sonnet4' | 'gpt5';
-
-interface AuggieCredentials {
-  apiKey?: string;
-  apiUrl?: string;
-}
-
 /**
- * Get Auggie credentials from environment variables
- * Supports both AUGMENT_SESSION_AUTH (full JSON) and separated token/URL
+ * Augment-specific configuration subset for Auggie analysis
  */
-function getAuggieCredentials(): AuggieCredentials {
-  // First try AUGMENT_SESSION_AUTH (full JSON token from `auggie token print`)
-  const sessionAuth = process.env.AUGMENT_SESSION_AUTH;
-  if (sessionAuth) {
-    try {
-      const parsed = JSON.parse(sessionAuth);
-      if (parsed.accessToken && parsed.tenantURL) {
-        console.log('[auggie] Found AUGMENT_SESSION_AUTH with full token');
-        return {
-          apiKey: parsed.accessToken,
-          apiUrl: parsed.tenantURL,
-        };
-      }
-    } catch {
-      console.warn('[auggie] Failed to parse AUGMENT_SESSION_AUTH as JSON');
-    }
-  }
+export type AuggieConfig = Pick<Config, 'augment' | 'nodeEnv'>;
 
-  // Fallback to separated AUGMENT_API_TOKEN / AUGMENT_API_URL
-  return {
-    apiKey: process.env.AUGMENT_API_TOKEN,
-    apiUrl: process.env.AUGMENT_API_URL,
-  };
-}
+export type AuggieModel = 'haiku4.5' | 'sonnet4.5' | 'sonnet4' | 'gpt5';
 
 export interface AuggieAnalysisOptions {
   /** Path to the repository to analyze */
@@ -74,6 +40,8 @@ export interface AuggieAnalysisOptions {
   scanId: string;
   /** Model to use (default: sonnet4.5) */
   model?: AuggieModel;
+  /** Augment SDK credentials from validated config */
+  credentials: AugmentCredentials;
 }
 
 /**
@@ -152,7 +120,7 @@ function parseAuggieResponse(
 export async function analyzeWithAuggie(
   options: AuggieAnalysisOptions
 ): Promise<SecurityFinding[]> {
-  const { repoPath, category, scanId, model = 'sonnet4.5' } = options;
+  const { repoPath, category, scanId, model = 'sonnet4.5', credentials } = options;
   const categoryCode = getCategoryCode(category);
 
   return withAgent(
@@ -186,15 +154,9 @@ export async function analyzeWithAuggie(
               'prompt.isFallback': prompt.isFallback,
             });
 
-            // Get credentials from environment variables
-            const credentials = getAuggieCredentials();
-
-            if (credentials.apiKey) {
-              console.log('[auggie] Using API credentials from environment');
-              console.log(`[auggie] API URL: ${credentials.apiUrl || 'not set'}`);
-            } else {
-              console.log('[auggie] No AUGMENT_SESSION_AUTH or AUGMENT_API_TOKEN found, SDK will try other auth methods');
-            }
+            // Credentials are validated at config load time and passed via options
+            console.log('[auggie] Using credentials from validated config');
+            console.log(`[auggie] API URL: ${credentials.apiUrl}`);
 
             console.log(
               `[auggie] Analyzing ${repoPath} for ${category} with ${model}`
@@ -204,13 +166,12 @@ export async function analyzeWithAuggie(
             client = await Auggie.create({
               workspaceRoot: repoPath,
               model,
-              // Pass credentials explicitly (SDK also reads from env vars as fallback)
-              ...(credentials.apiKey && { apiKey: credentials.apiKey }),
-              ...(credentials.apiUrl && { apiUrl: credentials.apiUrl }),
-              // Custom tools for structured vulnerability reporting
-              tools: {
-                report_vulnerability: reportVulnerabilityTool,
-              },
+              // Pass credentials from validated config
+              apiKey: credentials.apiKey,
+              apiUrl: credentials.apiUrl,
+              // tools: {
+              //   report_vulnerability: reportVulnerabilityTool,
+              // },
             });
 
             // Build the analysis prompt - ask for structured JSON output
@@ -252,12 +213,36 @@ Return ONLY the JSON array, no other text.`;
 
             return findings;
           } catch (error) {
+            // Handle SDK-specific errors with proper categorization
+            if (error instanceof APIError) {
+              console.error(`[auggie] API Error (${error.status} ${error.statusText}):`, error.message);
+              span.setAttributes({
+                'error.type': 'APIError',
+                'error.status': error.status,
+                'error.statusText': error.statusText,
+              });
+
+              // Retry logic for transient failures (5xx errors)
+              if (error.status >= 500 && error.status < 600) {
+                console.log('[auggie] Transient API error detected, consider retry');
+              }
+            } else if (error instanceof BlobTooLargeError) {
+              console.error('[auggie] File too large for indexing:', error.message);
+              span.setAttributes({
+                'error.type': 'BlobTooLargeError',
+              });
+            } else {
+              console.error(`[auggie] Analysis failed for ${category}:`, error);
+              span.setAttributes({
+                'error.type': error instanceof Error ? error.constructor.name : 'unknown',
+              });
+            }
+
             span.setStatus({
               code: SpanStatusCode.ERROR,
               message: error instanceof Error ? error.message : String(error),
             });
             span.recordException(error as Error);
-            console.error(`[auggie] Analysis failed for ${category}:`, error);
             return [];
           } finally {
             // Always close the client

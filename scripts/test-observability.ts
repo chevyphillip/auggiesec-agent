@@ -9,12 +9,13 @@
 
 await import('../src/instrumentation'); // CRITICAL: MUST be imported first
 
-import { loadConfig } from '../src/config';
+import { getAugmentCredentials, loadConfig } from '../src/config';
 import { sdk } from '../src/instrumentation';
 import { runSecurityAnalysis } from '../src/graph';
 
 // Validate configuration
 const config = loadConfig();
+const augmentCredentials = getAugmentCredentials(config);
 console.log(`[test] Environment: ${config.nodeEnv}`);
 console.log('[test] Configuration validated successfully');
 
@@ -27,6 +28,7 @@ try {
   const result = await runSecurityAnalysis({
     repoPath: './nodejs-goof',
     userQuery: 'Scan for all OWASP Top 10 vulnerabilities',
+    augmentCredentials,
   });
 
   console.log('\n=== Analysis Results ===');
