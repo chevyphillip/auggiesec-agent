@@ -30,6 +30,7 @@ import { join, relative } from 'node:path';
 import type { Config } from '../config';
 import type { OwaspCategory } from '../graph/state';
 import { tracer } from '../instrumentation';
+import { withTool } from '../observability';
 
 /**
  * Augment-specific configuration subset for DirectContext
@@ -178,62 +179,81 @@ export async function indexRepository(
   repoPath: string,
   scanId: string
 ): Promise<number> {
-  return tracer.startActiveSpan('direct_context.index_repository', async (span) => {
-    try {
-      span.setAttributes({
-        'scan.id': scanId,
-        'repo.path': repoPath,
+  return withTool(
+    'tool.direct_context_index',
+    async () => {
+      return tracer.startActiveSpan('direct_context.index_repository', async (span) => {
+        try {
+          span.setAttributes({
+            'scan.id': scanId,
+            'repo.path': repoPath,
+          });
+
+          console.log(`[direct-context] Reading files from ${repoPath}`);
+          const files = await readDirectoryFiles(repoPath);
+          console.log(`[direct-context] Found ${files.length} files to index`);
+
+          span.setAttribute('files.total', files.length);
+
+          if (files.length === 0) {
+            console.warn('[direct-context] No files found to index');
+            span.setStatus({ code: SpanStatusCode.OK });
+            return 0;
+          }
+
+          console.log('[direct-context] Adding files to index...');
+          const result = await context.addToIndex(files, { waitForIndexing: true });
+
+          console.log(
+            `[direct-context] Indexed ${result.newlyUploaded.length} new files, ` +
+            `${result.alreadyUploaded.length} already indexed`
+          );
+
+          span.setAttributes({
+            'files.newly_uploaded': result.newlyUploaded.length,
+            'files.already_uploaded': result.alreadyUploaded.length,
+          });
+
+          span.setStatus({ code: SpanStatusCode.OK });
+          return result.newlyUploaded.length + result.alreadyUploaded.length;
+        } catch (error) {
+          if (error instanceof APIError) {
+            console.error(`[direct-context] API Error (${error.status}):`, error.message);
+            span.setAttributes({
+              'error.type': 'APIError',
+              'error.status': error.status,
+            });
+          } else if (error instanceof BlobTooLargeError) {
+            console.error('[direct-context] File too large:', error.message);
+            span.setAttribute('error.type', 'BlobTooLargeError');
+          }
+
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
+        }
       });
-
-      console.log(`[direct-context] Reading files from ${repoPath}`);
-      const files = await readDirectoryFiles(repoPath);
-      console.log(`[direct-context] Found ${files.length} files to index`);
-
-      span.setAttribute('files.total', files.length);
-
-      if (files.length === 0) {
-        console.warn('[direct-context] No files found to index');
-        span.setStatus({ code: SpanStatusCode.OK });
-        return 0;
-      }
-
-      console.log('[direct-context] Adding files to index...');
-      const result = await context.addToIndex(files, { waitForIndexing: true });
-
-      console.log(
-        `[direct-context] Indexed ${result.newlyUploaded.length} new files, ` +
-        `${result.alreadyUploaded.length} already indexed`
-      );
-
-      span.setAttributes({
-        'files.newly_uploaded': result.newlyUploaded.length,
-        'files.already_uploaded': result.alreadyUploaded.length,
-      });
-
-      span.setStatus({ code: SpanStatusCode.OK });
-      return result.newlyUploaded.length + result.alreadyUploaded.length;
-    } catch (error) {
-      if (error instanceof APIError) {
-        console.error(`[direct-context] API Error (${error.status}):`, error.message);
-        span.setAttributes({
-          'error.type': 'APIError',
-          'error.status': error.status,
-        });
-      } else if (error instanceof BlobTooLargeError) {
-        console.error('[direct-context] File too large:', error.message);
-        span.setAttribute('error.type', 'BlobTooLargeError');
-      }
-
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
+    },
+    {
+      input: {
+        repoPath,
+        operation: 'index_repository',
+      },
+      scanContext: {
+        scanId,
+        repoPath,
+      },
+      metadata: {
+        toolName: 'direct_context_index',
+        operation: 'index',
+      },
     }
-  });
+  );
 }
 
 /**
@@ -242,43 +262,66 @@ export async function indexRepository(
  * @param context - DirectContext instance
  * @param category - OWASP category to search for
  * @param scanId - Scan ID for tracing
+ * @param repoPath - Repository path for context
  * @returns Formatted search results
  */
 export async function searchForVulnerabilities(
   context: DirectContext,
   category: OwaspCategory,
-  scanId: string
+  scanId: string,
+  repoPath?: string
 ): Promise<string> {
-  return tracer.startActiveSpan('direct_context.search', async (span) => {
-    try {
-      span.setAttributes({
-        'scan.id': scanId,
-        'owasp.category': category,
+  const searchQuery = buildSearchQuery(category);
+
+  return withTool(
+    'tool.direct_context_search',
+    async () => {
+      return tracer.startActiveSpan('direct_context.search', async (span) => {
+        try {
+          span.setAttributes({
+            'scan.id': scanId,
+            'owasp.category': category,
+          });
+
+          console.log(`[direct-context] Searching for: ${searchQuery}`);
+
+          const results = await context.search(searchQuery, {
+            maxOutputLength: 40000, // Increased for comprehensive results
+          });
+
+          span.setAttribute('results.length', results.length);
+          span.setStatus({ code: SpanStatusCode.OK });
+
+          return results;
+        } catch (error) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
+        }
       });
-
-      // Build search query based on OWASP category
-      const searchQuery = buildSearchQuery(category);
-      console.log(`[direct-context] Searching for: ${searchQuery}`);
-
-      const results = await context.search(searchQuery, {
-        maxOutputLength: 40000, // Increased for comprehensive results
-      });
-
-      span.setAttribute('results.length', results.length);
-      span.setStatus({ code: SpanStatusCode.OK });
-
-      return results;
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
+    },
+    {
+      input: {
+        category,
+        searchQuery: searchQuery.substring(0, 200),
+        maxOutputLength: 40000,
+      },
+      scanContext: {
+        scanId,
+        owaspCategory: category,
+        repoPath,
+      },
+      metadata: {
+        toolName: 'direct_context_search',
+        operation: 'search',
+      },
     }
-  });
+  );
 }
 
 /**
@@ -306,28 +349,49 @@ function buildSearchQuery(category: OwaspCategory): string {
  *
  * @param context - DirectContext instance
  * @param stateFilePath - Path to save state file
+ * @param scanId - Optional scan ID for tracing
  */
 export async function exportContextState(
   context: DirectContext,
-  stateFilePath: string
+  stateFilePath: string,
+  scanId?: string
 ): Promise<void> {
-  return tracer.startActiveSpan('direct_context.export_state', async (span) => {
-    try {
-      span.setAttribute('state.file', stateFilePath);
+  return withTool(
+    'tool.direct_context_export',
+    async () => {
+      return tracer.startActiveSpan('direct_context.export_state', async (span) => {
+        try {
+          span.setAttribute('state.file', stateFilePath);
+          if (scanId) {
+            span.setAttribute('scan.id', scanId);
+          }
 
-      await context.exportToFile(stateFilePath);
-      console.log(`[direct-context] State exported to ${stateFilePath}`);
+          await context.exportToFile(stateFilePath);
+          console.log(`[direct-context] State exported to ${stateFilePath}`);
 
-      span.setStatus({ code: SpanStatusCode.OK });
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
+          span.setStatus({ code: SpanStatusCode.OK });
+        } catch (error) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
+        }
       });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
+    },
+    {
+      input: {
+        stateFilePath,
+        operation: 'export_state',
+      },
+      scanContext: scanId ? { scanId } : undefined,
+      metadata: {
+        toolName: 'direct_context_export',
+        operation: 'export',
+      },
     }
-  });
+  );
 }

@@ -23,6 +23,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { tracer } from '../instrumentation';
+import { withTool } from '../observability';
 import type { FileMetadata } from './incremental-indexer';
 
 /**
@@ -72,49 +73,70 @@ export async function saveContextState(
   stateDir?: string,
   fileMetadata?: Map<string, FileMetadata>
 ): Promise<string> {
-  return tracer.startActiveSpan('context_state.save', async (span) => {
-    try {
-      const stateFilePath = getStateFilePath(scanId, stateDir);
-      span.setAttribute('state.file', stateFilePath);
-      span.setAttribute('scan.id', scanId);
+  return withTool(
+    'tool.context_state_save',
+    async () => {
+      return tracer.startActiveSpan('context_state.save', async (span) => {
+        try {
+          const stateFilePath = getStateFilePath(scanId, stateDir);
+          span.setAttribute('state.file', stateFilePath);
+          span.setAttribute('scan.id', scanId);
 
-      // Ensure state directory exists
-      await mkdir(dirname(stateFilePath), { recursive: true });
+          // Ensure state directory exists
+          await mkdir(dirname(stateFilePath), { recursive: true });
 
-      const scanState: ScanState = {
-        ...state,
-        metadata: {
-          scanId,
-          timestamp: new Date().toISOString(),
-          repoPath,
-          indexedFileCount: state.blobs.length,
-        },
-        fileMetadata: fileMetadata ? Object.fromEntries(fileMetadata) : undefined,
-      };
+          const scanState: ScanState = {
+            ...state,
+            metadata: {
+              scanId,
+              timestamp: new Date().toISOString(),
+              repoPath,
+              indexedFileCount: state.blobs.length,
+            },
+            fileMetadata: fileMetadata ? Object.fromEntries(fileMetadata) : undefined,
+          };
 
-      await writeFile(stateFilePath, JSON.stringify(scanState, null, 2), 'utf-8');
+          await writeFile(stateFilePath, JSON.stringify(scanState, null, 2), 'utf-8');
 
-      console.log(`[state-manager] State saved to ${stateFilePath}`);
-      console.log(`[state-manager] Indexed files: ${scanState.metadata.indexedFileCount}`);
+          console.log(`[state-manager] State saved to ${stateFilePath}`);
+          console.log(`[state-manager] Indexed files: ${scanState.metadata.indexedFileCount}`);
 
-      span.setAttributes({
-        'state.indexed_files': scanState.metadata.indexedFileCount,
-        'state.checkpoint_id': state.checkpointId || 'none',
+          span.setAttributes({
+            'state.indexed_files': scanState.metadata.indexedFileCount,
+            'state.checkpoint_id': state.checkpointId || 'none',
+          });
+
+          span.setStatus({ code: SpanStatusCode.OK });
+          return stateFilePath;
+        } catch (error) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
+        }
       });
-
-      span.setStatus({ code: SpanStatusCode.OK });
-      return stateFilePath;
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
+    },
+    {
+      input: {
+        scanId,
+        repoPath,
+        indexedFileCount: state.blobs.length,
+        operation: 'save_state',
+      },
+      scanContext: {
+        scanId,
+        repoPath,
+      },
+      metadata: {
+        toolName: 'context_state_save',
+        operation: 'save',
+      },
     }
-  });
+  );
 }
 
 /**
@@ -128,43 +150,61 @@ export async function loadContextState(
   scanId: string,
   stateDir?: string
 ): Promise<ScanState | null> {
-  return tracer.startActiveSpan('context_state.load', async (span) => {
-    try {
-      const stateFilePath = getStateFilePath(scanId, stateDir);
-      span.setAttribute('state.file', stateFilePath);
-      span.setAttribute('scan.id', scanId);
+  return withTool(
+    'tool.context_state_load',
+    async () => {
+      return tracer.startActiveSpan('context_state.load', async (span) => {
+        try {
+          const stateFilePath = getStateFilePath(scanId, stateDir);
+          span.setAttribute('state.file', stateFilePath);
+          span.setAttribute('scan.id', scanId);
 
-      const content = await readFile(stateFilePath, 'utf-8');
-      const state = JSON.parse(content) as ScanState;
+          const content = await readFile(stateFilePath, 'utf-8');
+          const state = JSON.parse(content) as ScanState;
 
-      console.log(`[state-manager] State loaded from ${stateFilePath}`);
-      console.log(`[state-manager] Indexed files: ${state.metadata.indexedFileCount}`);
-      console.log(`[state-manager] Last updated: ${state.metadata.timestamp}`);
+          console.log(`[state-manager] State loaded from ${stateFilePath}`);
+          console.log(`[state-manager] Indexed files: ${state.metadata.indexedFileCount}`);
+          console.log(`[state-manager] Last updated: ${state.metadata.timestamp}`);
 
-      span.setAttributes({
-        'state.indexed_files': state.metadata.indexedFileCount,
-        'state.checkpoint_id': state.checkpointId || 'none',
-        'state.timestamp': state.metadata.timestamp,
+          span.setAttributes({
+            'state.indexed_files': state.metadata.indexedFileCount,
+            'state.checkpoint_id': state.checkpointId || 'none',
+            'state.timestamp': state.metadata.timestamp,
+          });
+
+          span.setStatus({ code: SpanStatusCode.OK });
+          return state;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            console.log(`[state-manager] No existing state found for scan ${scanId}`);
+            span.setAttribute('state.found', false);
+            span.setStatus({ code: SpanStatusCode.OK });
+            return null;
+          }
+
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
+        }
       });
-
-      span.setStatus({ code: SpanStatusCode.OK });
-      return state;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        console.log(`[state-manager] No existing state found for scan ${scanId}`);
-        span.setAttribute('state.found', false);
-        span.setStatus({ code: SpanStatusCode.OK });
-        return null;
-      }
-
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
+    },
+    {
+      input: {
+        scanId,
+        operation: 'load_state',
+      },
+      scanContext: {
+        scanId,
+      },
+      metadata: {
+        toolName: 'context_state_load',
+        operation: 'load',
+      },
     }
-  });
+  );
 }

@@ -119,20 +119,93 @@ export async function withGeneration<T>(
 }
 
 /**
- * Wrapper for tool observations (Auggie SDK calls)
+ * Options for tool observations
+ */
+export interface ToolObservationOptions {
+  /** Input parameters passed to the tool */
+  input?: unknown;
+  /** Scan context for OWASP analysis */
+  scanContext?: {
+    scanId: string;
+    owaspCategory?: OwaspCategory;
+    repoPath?: string;
+  };
+  /** Additional metadata */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Wrapper for tool observations (Auggie SDK calls, external API calls)
+ *
+ * Automatically handles:
+ * - Input/output capture
+ * - Error recording with exception details
+ * - Scan context attributes (scanId, owaspCategory, repoPath)
+ * - Duration tracking (via Langfuse)
+ * - Consistent metadata structure
+ *
+ * @example
+ * ```typescript
+ * const results = await withTool(
+ *   'tool.auggie_search',
+ *   async () => {
+ *     return await client.search({ query: 'SQL injection' });
+ *   },
+ *   {
+ *     input: { query: 'SQL injection', maxResults: 10 },
+ *     scanContext: { scanId, owaspCategory: 'A03:2021-Injection', repoPath },
+ *     metadata: { toolName: 'auggie_search', version: '1.0' }
+ *   }
+ * );
+ * ```
  */
 export async function withTool<T>(
   name: string,
   fn: () => Promise<T>,
-  options?: { input?: unknown; metadata?: Record<string, unknown> }
+  options?: ToolObservationOptions
 ): Promise<T> {
   return startActiveObservation(
     name,
     async (obs) => {
-      if (options?.input) obs.update({ input: options.input, metadata: options?.metadata });
-      const result = await fn();
-      obs.update({ output: result });
-      return result;
+      try {
+        // Set initial observation attributes
+        const metadata: Record<string, unknown> = {
+          ...options?.metadata,
+        };
+
+        // Add scan context to metadata if provided
+        if (options?.scanContext) {
+          metadata.scanId = options.scanContext.scanId;
+          if (options.scanContext.owaspCategory) {
+            metadata.owaspCategory = options.scanContext.owaspCategory;
+          }
+          if (options.scanContext.repoPath) {
+            metadata.repoPath = options.scanContext.repoPath;
+          }
+        }
+
+        obs.update({
+          input: options?.input,
+          metadata,
+        });
+
+        // Execute the tool function
+        const result = await fn();
+
+        // Update with output
+        obs.update({ output: result });
+
+        return result;
+      } catch (error) {
+        // Record the exception in the observation
+        obs.update({
+          level: 'ERROR',
+          statusMessage: error instanceof Error ? error.message : String(error),
+        });
+
+        // Re-throw to maintain error propagation
+        throw error;
+      }
     },
     { asType: 'tool' }
   );

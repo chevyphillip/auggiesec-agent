@@ -21,6 +21,7 @@ import type { DirectContext } from '@augmentcode/auggie-sdk';
 import { SpanStatusCode } from '@opentelemetry/api';
 import type { OwaspCategory } from '../graph/state';
 import { tracer } from '../instrumentation';
+import { withTool } from '../observability';
 
 /**
  * Search result with context
@@ -90,6 +91,7 @@ export function buildVulnerabilitySearchQuery(category: OwaspCategory): string {
  * @param context - DirectContext instance
  * @param category - OWASP category to search for
  * @param scanId - Scan ID for tracing
+ * @param repoPath - Repository path for context
  * @param maxOutputLength - Maximum length of search results (default: 40000)
  * @returns Search results with metadata
  */
@@ -97,54 +99,77 @@ export async function searchForVulnerabilities(
   context: DirectContext,
   category: OwaspCategory,
   scanId: string,
+  repoPath?: string,
   maxOutputLength = 40000
 ): Promise<SearchResult> {
-  return tracer.startActiveSpan('targeted_search.search', async (span) => {
-    try {
-      span.setAttributes({
-        'scan.id': scanId,
-        'owasp.category': category,
-        'search.max_output_length': maxOutputLength,
+  const searchQuery = buildVulnerabilitySearchQuery(category);
+
+  return withTool(
+    'tool.targeted_search',
+    async () => {
+      return tracer.startActiveSpan('targeted_search.search', async (span) => {
+        try {
+          span.setAttributes({
+            'scan.id': scanId,
+            'owasp.category': category,
+            'search.max_output_length': maxOutputLength,
+          });
+
+          console.log(`[targeted-search] Searching for ${category}`);
+          console.log(`[targeted-search] Query: ${searchQuery.substring(0, 100)}...`);
+
+          const formattedResults = await context.search(searchQuery, {
+            maxOutputLength,
+          });
+
+          // Count chunks (each chunk is typically separated by file headers)
+          const chunkCount = (formattedResults.match(/^##\s+/gm) || []).length;
+          const resultLength = formattedResults.length;
+
+          console.log(`[targeted-search] Found ${chunkCount} code chunks (${resultLength} chars)`);
+
+          span.setAttributes({
+            'search.chunk_count': chunkCount,
+            'search.result_length': resultLength,
+            'search.has_results': resultLength > 0,
+          });
+
+          span.setStatus({ code: SpanStatusCode.OK });
+
+          return {
+            formattedResults,
+            chunkCount,
+            resultLength,
+          };
+        } catch (error) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
+        }
       });
-
-      const searchQuery = buildVulnerabilitySearchQuery(category);
-      console.log(`[targeted-search] Searching for ${category}`);
-      console.log(`[targeted-search] Query: ${searchQuery.substring(0, 100)}...`);
-
-      const formattedResults = await context.search(searchQuery, {
+    },
+    {
+      input: {
+        category,
+        searchQuery: searchQuery.substring(0, 200),
         maxOutputLength,
-      });
-
-      // Count chunks (each chunk is typically separated by file headers)
-      const chunkCount = (formattedResults.match(/^##\s+/gm) || []).length;
-      const resultLength = formattedResults.length;
-
-      console.log(`[targeted-search] Found ${chunkCount} code chunks (${resultLength} chars)`);
-
-      span.setAttributes({
-        'search.chunk_count': chunkCount,
-        'search.result_length': resultLength,
-        'search.has_results': resultLength > 0,
-      });
-
-      span.setStatus({ code: SpanStatusCode.OK });
-
-      return {
-        formattedResults,
-        chunkCount,
-        resultLength,
-      };
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
+      },
+      scanContext: {
+        scanId,
+        owaspCategory: category,
+        repoPath,
+      },
+      metadata: {
+        toolName: 'targeted_search',
+        operation: 'search',
+      },
     }
-  });
+  );
 }
 
 
@@ -162,48 +187,69 @@ export async function searchForVulnerabilities(
  * @param context - DirectContext instance
  * @param category - OWASP category to analyze
  * @param scanId - Scan ID for tracing
+ * @param repoPath - Repository path for context
  * @returns LLM analysis of found vulnerabilities
  */
 export async function searchAndAnalyze(
   context: DirectContext,
   category: OwaspCategory,
-  scanId: string
+  scanId: string,
+  repoPath?: string
 ): Promise<string> {
-  return tracer.startActiveSpan('targeted_search.search_and_analyze', async (span) => {
-    try {
-      span.setAttributes({
-        'scan.id': scanId,
-        'owasp.category': category,
+  const searchQuery = buildVulnerabilitySearchQuery(category);
+  const analysisPrompt = buildAnalysisPrompt(category);
+
+  return withTool(
+    'tool.targeted_search_and_analyze',
+    async () => {
+      return tracer.startActiveSpan('targeted_search.search_and_analyze', async (span) => {
+        try {
+          span.setAttributes({
+            'scan.id': scanId,
+            'owasp.category': category,
+          });
+
+          console.log(`[targeted-search] Searching and analyzing for ${category}`);
+
+          const answer = await context.searchAndAsk(searchQuery, analysisPrompt);
+
+          span.setAttributes({
+            'analysis.length': answer.length,
+            'analysis.has_results': answer.length > 0,
+          });
+
+          span.setStatus({ code: SpanStatusCode.OK });
+
+          return answer;
+        } catch (error) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
+        }
       });
-
-      const searchQuery = buildVulnerabilitySearchQuery(category);
-
-      // Build analysis prompt
-      const analysisPrompt = buildAnalysisPrompt(category);
-
-      console.log(`[targeted-search] Searching and analyzing for ${category}`);
-
-      const answer = await context.searchAndAsk(searchQuery, analysisPrompt);
-
-      span.setAttributes({
-        'analysis.length': answer.length,
-        'analysis.has_results': answer.length > 0,
-      });
-
-      span.setStatus({ code: SpanStatusCode.OK });
-
-      return answer;
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
+    },
+    {
+      input: {
+        category,
+        searchQuery: searchQuery.substring(0, 200),
+        analysisPrompt: analysisPrompt.substring(0, 200),
+      },
+      scanContext: {
+        scanId,
+        owaspCategory: category,
+        repoPath,
+      },
+      metadata: {
+        toolName: 'targeted_search_and_analyze',
+        operation: 'search_and_analyze',
+      },
     }
-  });
+  );
 }
 
 /**

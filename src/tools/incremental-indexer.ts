@@ -26,6 +26,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { tracer } from '../instrumentation';
+import { withTool } from '../observability';
 
 /**
  * File metadata for change detection
@@ -52,72 +53,90 @@ export interface IncrementalIndexResult {
  * Collect file metadata from a directory
  *
  * @param dirPath - Directory to scan
+ * @param scanId - Optional scan ID for tracing
  * @returns Map of relative path to file metadata
  */
 export async function collectFileMetadata(
-  dirPath: string
+  dirPath: string,
+  scanId?: string
 ): Promise<Map<string, FileMetadata>> {
-  return tracer.startActiveSpan('incremental.collect_metadata', async (span) => {
-    try {
-      const metadata = new Map<string, FileMetadata>();
-      const excludeDirs = new Set([
-        'node_modules',
-        '.git',
-        'dist',
-        'build',
-        'coverage',
-        '.next',
-        '.cache',
-        '.auggie-state',
-      ]);
-      const excludeExtensions = new Set(['.jpg', '.png', '.gif', '.pdf', '.zip']);
+  return withTool(
+    'tool.incremental_collect_metadata',
+    async () => {
+      return tracer.startActiveSpan('incremental.collect_metadata', async (span) => {
+        try {
+          const metadata = new Map<string, FileMetadata>();
+          const excludeDirs = new Set([
+            'node_modules',
+            '.git',
+            'dist',
+            'build',
+            'coverage',
+            '.next',
+            '.cache',
+            '.auggie-state',
+          ]);
+          const excludeExtensions = new Set(['.jpg', '.png', '.gif', '.pdf', '.zip']);
 
-      async function walk(currentPath: string): Promise<void> {
-        const entries = await readdir(currentPath, { withFileTypes: true });
+          async function walk(currentPath: string): Promise<void> {
+            const entries = await readdir(currentPath, { withFileTypes: true });
 
-        for (const entry of entries) {
-          const fullPath = join(currentPath, entry.name);
+            for (const entry of entries) {
+              const fullPath = join(currentPath, entry.name);
 
-          if (entry.isDirectory()) {
-            if (!excludeDirs.has(entry.name) && !entry.name.startsWith('.')) {
-              await walk(fullPath);
-            }
-          } else if (entry.isFile()) {
-            const ext = entry.name.substring(entry.name.lastIndexOf('.'));
-            if (!excludeExtensions.has(ext) && !entry.name.startsWith('.')) {
-              try {
-                const stats = await stat(fullPath);
-                const relativePath = relative(dirPath, fullPath);
-                metadata.set(relativePath, {
-                  path: relativePath,
-                  mtime: stats.mtimeMs,
-                  size: stats.size,
-                });
-              } catch (error) {
-                console.warn(`[incremental] Failed to stat ${fullPath}:`, error);
+              if (entry.isDirectory()) {
+                if (!excludeDirs.has(entry.name) && !entry.name.startsWith('.')) {
+                  await walk(fullPath);
+                }
+              } else if (entry.isFile()) {
+                const ext = entry.name.substring(entry.name.lastIndexOf('.'));
+                if (!excludeExtensions.has(ext) && !entry.name.startsWith('.')) {
+                  try {
+                    const stats = await stat(fullPath);
+                    const relativePath = relative(dirPath, fullPath);
+                    metadata.set(relativePath, {
+                      path: relativePath,
+                      mtime: stats.mtimeMs,
+                      size: stats.size,
+                    });
+                  } catch (error) {
+                    console.warn(`[incremental] Failed to stat ${fullPath}:`, error);
+                  }
+                }
               }
             }
           }
+
+          await walk(dirPath);
+
+          span.setAttribute('files.total', metadata.size);
+          span.setStatus({ code: SpanStatusCode.OK });
+
+          return metadata;
+        } catch (error) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
         }
-      }
-
-      await walk(dirPath);
-
-      span.setAttribute('files.total', metadata.size);
-      span.setStatus({ code: SpanStatusCode.OK });
-
-      return metadata;
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
       });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
+    },
+    {
+      input: {
+        dirPath,
+        operation: 'collect_metadata',
+      },
+      scanContext: scanId ? { scanId, repoPath: dirPath } : undefined,
+      metadata: {
+        toolName: 'incremental_collect_metadata',
+        operation: 'collect_metadata',
+      },
     }
-  });
+  );
 }
 
 /**
@@ -125,72 +144,91 @@ export async function collectFileMetadata(
  *
  * @param dirPath - Repository directory
  * @param previousMetadata - Metadata from previous scan
+ * @param scanId - Optional scan ID for tracing
  * @returns Files to add, remove, and unchanged
  */
 export async function analyzeChanges(
   dirPath: string,
-  previousMetadata: Map<string, FileMetadata>
+  previousMetadata: Map<string, FileMetadata>,
+  scanId?: string
 ): Promise<IncrementalIndexResult> {
-  return tracer.startActiveSpan('incremental.analyze_changes', async (span) => {
-    try {
-      const currentMetadata = await collectFileMetadata(dirPath);
-      const toAdd: File[] = [];
-      const toRemove: string[] = [];
-      const unchanged: string[] = [];
+  return withTool(
+    'tool.incremental_analyze_changes',
+    async () => {
+      return tracer.startActiveSpan('incremental.analyze_changes', async (span) => {
+        try {
+          const currentMetadata = await collectFileMetadata(dirPath, scanId);
+          const toAdd: File[] = [];
+          const toRemove: string[] = [];
+          const unchanged: string[] = [];
 
-      // Find new and modified files
-      for (const [path, current] of currentMetadata) {
-        const previous = previousMetadata.get(path);
+          // Find new and modified files
+          for (const [path, current] of currentMetadata) {
+            const previous = previousMetadata.get(path);
 
-        if (!previous) {
-          // New file
-          const contents = await readFile(join(dirPath, path), 'utf-8');
-          toAdd.push({ path, contents });
-        } else if (
-          current.mtime !== previous.mtime ||
-          current.size !== previous.size
-        ) {
-          // Modified file
-          const contents = await readFile(join(dirPath, path), 'utf-8');
-          toAdd.push({ path, contents });
-        } else {
-          // Unchanged file
-          unchanged.push(path);
+            if (!previous) {
+              // New file
+              const contents = await readFile(join(dirPath, path), 'utf-8');
+              toAdd.push({ path, contents });
+            } else if (
+              current.mtime !== previous.mtime ||
+              current.size !== previous.size
+            ) {
+              // Modified file
+              const contents = await readFile(join(dirPath, path), 'utf-8');
+              toAdd.push({ path, contents });
+            } else {
+              // Unchanged file
+              unchanged.push(path);
+            }
+          }
+
+          // Find deleted files
+          for (const path of previousMetadata.keys()) {
+            if (!currentMetadata.has(path)) {
+              toRemove.push(path);
+            }
+          }
+
+          console.log(`[incremental] Analysis complete:`);
+          console.log(`  - New/Modified: ${toAdd.length}`);
+          console.log(`  - Deleted: ${toRemove.length}`);
+          console.log(`  - Unchanged: ${unchanged.length}`);
+
+          span.setAttributes({
+            'files.to_add': toAdd.length,
+            'files.to_remove': toRemove.length,
+            'files.unchanged': unchanged.length,
+          });
+
+          span.setStatus({ code: SpanStatusCode.OK });
+
+          return { toAdd, toRemove, unchanged };
+        } catch (error) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
         }
-      }
-
-      // Find deleted files
-      for (const path of previousMetadata.keys()) {
-        if (!currentMetadata.has(path)) {
-          toRemove.push(path);
-        }
-      }
-
-      console.log(`[incremental] Analysis complete:`);
-      console.log(`  - New/Modified: ${toAdd.length}`);
-      console.log(`  - Deleted: ${toRemove.length}`);
-      console.log(`  - Unchanged: ${unchanged.length}`);
-
-      span.setAttributes({
-        'files.to_add': toAdd.length,
-        'files.to_remove': toRemove.length,
-        'files.unchanged': unchanged.length,
       });
-
-      span.setStatus({ code: SpanStatusCode.OK });
-
-      return { toAdd, toRemove, unchanged };
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
+    },
+    {
+      input: {
+        dirPath,
+        previousFileCount: previousMetadata.size,
+        operation: 'analyze_changes',
+      },
+      scanContext: scanId ? { scanId, repoPath: dirPath } : undefined,
+      metadata: {
+        toolName: 'incremental_analyze_changes',
+        operation: 'analyze_changes',
+      },
     }
-  });
+  );
 }
 
 /**
@@ -208,48 +246,68 @@ export async function applyIncrementalUpdate(
   previousMetadata: Map<string, FileMetadata>,
   scanId: string
 ): Promise<Map<string, FileMetadata>> {
-  return tracer.startActiveSpan('incremental.apply_update', async (span) => {
-    try {
-      span.setAttribute('scan.id', scanId);
+  return withTool(
+    'tool.incremental_apply_update',
+    async () => {
+      return tracer.startActiveSpan('incremental.apply_update', async (span) => {
+        try {
+          span.setAttribute('scan.id', scanId);
 
-      const changes = await analyzeChanges(dirPath, previousMetadata);
+          const changes = await analyzeChanges(dirPath, previousMetadata, scanId);
 
-      // Remove deleted files
-      if (changes.toRemove.length > 0) {
-        console.log(`[incremental] Removing ${changes.toRemove.length} deleted files`);
-        await context.removeFromIndex(changes.toRemove);
-        span.setAttribute('files.removed', changes.toRemove.length);
-      }
+          // Remove deleted files
+          if (changes.toRemove.length > 0) {
+            console.log(`[incremental] Removing ${changes.toRemove.length} deleted files`);
+            await context.removeFromIndex(changes.toRemove);
+            span.setAttribute('files.removed', changes.toRemove.length);
+          }
 
-      // Add new/modified files
-      if (changes.toAdd.length > 0) {
-        console.log(`[incremental] Adding ${changes.toAdd.length} new/modified files`);
-        await context.addToIndex(changes.toAdd, { waitForIndexing: true });
-        span.setAttribute('files.added', changes.toAdd.length);
-      }
+          // Add new/modified files
+          if (changes.toAdd.length > 0) {
+            console.log(`[incremental] Adding ${changes.toAdd.length} new/modified files`);
+            await context.addToIndex(changes.toAdd, { waitForIndexing: true });
+            span.setAttribute('files.added', changes.toAdd.length);
+          }
 
-      // Return updated metadata
-      const updatedMetadata = await collectFileMetadata(dirPath);
+          // Return updated metadata
+          const updatedMetadata = await collectFileMetadata(dirPath, scanId);
 
-      span.setAttributes({
-        'files.total': updatedMetadata.size,
-        'files.unchanged': changes.unchanged.length,
+          span.setAttributes({
+            'files.total': updatedMetadata.size,
+            'files.unchanged': changes.unchanged.length,
+          });
+
+          span.setStatus({ code: SpanStatusCode.OK });
+
+          return updatedMetadata;
+        } catch (error) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          span.recordException(error as Error);
+          throw error;
+        } finally {
+          span.end();
+        }
       });
-
-      span.setStatus({ code: SpanStatusCode.OK });
-
-      return updatedMetadata;
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
+    },
+    {
+      input: {
+        dirPath,
+        previousFileCount: previousMetadata.size,
+        operation: 'apply_update',
+      },
+      scanContext: {
+        scanId,
+        repoPath: dirPath,
+      },
+      metadata: {
+        toolName: 'incremental_apply_update',
+        operation: 'apply_update',
+      },
     }
-  });
+  );
 }
 
 /**
