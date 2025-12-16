@@ -11,25 +11,19 @@
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.3"
+    "@types/bun": "^1.3.4"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@augmentcode/auggie-sdk": "^0.1.10",
-    "@langchain/anthropic": "^1.2.3",
-    "@langchain/core": "^1.1.4",
-    "@langchain/langgraph": "^1.0.4",
+    "@augmentcode/auggie-sdk": "^0.1.11",
     "@langfuse/otel": "^4.4.9",
     "@langfuse/tracing": "^4.4.9",
-    "@mastra/core": "^0.24.6",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/sdk-node": "^0.208.0",
-    "ai": "^5.0.108",
-    "dotenv": "^16.4.7",
-    "langchain": "^1.1.5",
+    "dotenv": "^17.2.3",
     "langfuse": "^3.38.6",
-    "zod": "^3.24.0"
+    "zod": "^4.2.1"
   }
 }
