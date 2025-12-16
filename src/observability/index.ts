@@ -119,6 +119,46 @@ export async function withGeneration<T>(
 }
 
 /**
+ * Exact field names that should be redacted from observability data
+ * Only these exact field names (case-sensitive) are redacted
+ */
+const SENSITIVE_FIELDS = ['apiKey', 'apiUrl'] as const;
+
+/**
+ * Recursively redact sensitive fields from an object
+ *
+ * @param obj - The object to redact
+ * @returns A new object with sensitive fields replaced with '[REDACTED]'
+ */
+function redactSensitive(obj: unknown): unknown {
+  // Handle primitives and null
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(item => redactSensitive(item));
+  }
+
+  // Handle objects
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const isSensitive = SENSITIVE_FIELDS.includes(key as typeof SENSITIVE_FIELDS[number]);
+
+    if (isSensitive) {
+      result[key] = '[REDACTED]';
+    } else if (typeof value === 'object' && value !== null) {
+      result[key] = redactSensitive(value);
+    } else {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Options for tool observations
  */
 export interface ToolObservationOptions {
@@ -132,6 +172,8 @@ export interface ToolObservationOptions {
   };
   /** Additional metadata */
   metadata?: Record<string, unknown>;
+  /** Whether to capture output (default: true). Set to false for operations that return sensitive data. */
+  captureOutput?: boolean;
 }
 
 /**
@@ -192,8 +234,11 @@ export async function withTool<T>(
         // Execute the tool function
         const result = await fn();
 
-        // Update with output
-        obs.update({ output: result });
+        // Update with output (with redaction and captureOutput control)
+        if (options?.captureOutput !== false) {
+          const redactedOutput = redactSensitive(result);
+          obs.update({ output: redactedOutput });
+        }
 
         return result;
       } catch (error) {
@@ -217,14 +262,20 @@ export async function withTool<T>(
 export async function withRetriever<T>(
   name: string,
   fn: () => Promise<T>,
-  options?: { input?: unknown; metadata?: Record<string, unknown> }
+  options?: { input?: unknown; metadata?: Record<string, unknown>; captureOutput?: boolean }
 ): Promise<T> {
   return startActiveObservation(
     name,
     async (obs) => {
       if (options?.input) obs.update({ input: options.input, metadata: options?.metadata });
       const result = await fn();
-      obs.update({ output: result });
+
+      // Update with output (with redaction and captureOutput control)
+      if (options?.captureOutput !== false) {
+        const redactedOutput = redactSensitive(result);
+        obs.update({ output: redactedOutput });
+      }
+
       return result;
     },
     { asType: 'retriever' }
@@ -237,14 +288,20 @@ export async function withRetriever<T>(
 export async function withChain<T>(
   name: string,
   fn: () => Promise<T>,
-  options?: { input?: unknown; metadata?: Record<string, unknown> }
+  options?: { input?: unknown; metadata?: Record<string, unknown>; captureOutput?: boolean }
 ): Promise<T> {
   return startActiveObservation(
     name,
     async (obs) => {
       if (options?.input) obs.update({ input: options.input, metadata: options?.metadata });
       const result = await fn();
-      obs.update({ output: result });
+
+      // Update with output (with redaction and captureOutput control)
+      if (options?.captureOutput !== false) {
+        const redactedOutput = redactSensitive(result);
+        obs.update({ output: redactedOutput });
+      }
+
       return result;
     },
     { asType: 'chain' }
@@ -257,14 +314,20 @@ export async function withChain<T>(
 export async function withAgent<T>(
   name: string,
   fn: () => Promise<T>,
-  options?: { input?: unknown; metadata?: Record<string, unknown> }
+  options?: { input?: unknown; metadata?: Record<string, unknown>; captureOutput?: boolean }
 ): Promise<T> {
   return startActiveObservation(
     name,
     async (obs) => {
       if (options?.input) obs.update({ input: options.input, metadata: options?.metadata });
       const result = await fn();
-      obs.update({ output: result });
+
+      // Update with output (with redaction and captureOutput control)
+      if (options?.captureOutput !== false) {
+        const redactedOutput = redactSensitive(result);
+        obs.update({ output: redactedOutput });
+      }
+
       return result;
     },
     { asType: 'agent' }

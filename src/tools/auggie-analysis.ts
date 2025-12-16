@@ -189,6 +189,8 @@ export async function analyzeWithAuggie(
 	                  toolName: 'auggie_create',
 	                  toolType: 'auggie_sdk',
 	                },
+	                // Do not capture output to prevent exposing API credentials
+	                captureOutput: false,
 	              }
 	            );
 

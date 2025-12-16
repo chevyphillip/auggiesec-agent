@@ -5,7 +5,7 @@
  * expected attributes (input, output, metadata, observation type).
  */
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, beforeEach, afterEach, mock } from 'bun:test';
 import { withTool, type ToolObservationOptions } from './index';
 
 describe('Observability - Tool Observations', () => {
@@ -143,6 +143,27 @@ describe('Observability - Tool Observations', () => {
       );
 
       expect(result).toEqual({ status: 'ok' });
+    });
+
+    test('returns unmodified result with captureOutput: false', async () => {
+      const result = await withTool(
+        'test.no_capture_tool',
+        async () => {
+          return {
+            apiKey: 'secret-key-12345',
+            sensitiveData: 'should not be logged',
+          };
+        },
+        {
+          captureOutput: false,
+        }
+      );
+
+      // Result should still be returned unmodified
+      expect(result).toEqual({
+        apiKey: 'secret-key-12345',
+        sensitiveData: 'should not be logged',
+      });
     });
   });
 });
