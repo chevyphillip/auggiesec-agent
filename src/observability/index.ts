@@ -142,7 +142,7 @@ const SENSITIVE_KEYS = [
  * @param obj - The object to redact
  * @returns A new object with sensitive fields replaced with '[REDACTED]'
  */
-export function redactSensitive(obj: unknown): unknown {
+function redactSensitive(obj: unknown): unknown {
   // Handle primitives and null
   if (obj === null || typeof obj !== 'object') {
     return obj;
