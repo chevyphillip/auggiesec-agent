@@ -14,20 +14,7 @@ import { describe, expect, test } from 'bun:test';
  * Test helper to access the private redactSensitive function
  * This duplicates the logic for testing purposes
  */
-const SENSITIVE_KEYS = [
-  'apikey',
-  'apitoken',
-  'secret',
-  'password',
-  'credentials',
-  'accesstoken',
-  'token',
-  'auth',
-  'authorization',
-  'bearer',
-  'privatekey',
-  'secretkey',
-] as const;
+const SENSITIVE_FIELDS = ['apiKey', 'apiUrl'] as const;
 
 function redactSensitive(obj: unknown): unknown {
   if (obj === null || typeof obj !== 'object') {
@@ -40,10 +27,7 @@ function redactSensitive(obj: unknown): unknown {
 
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
-    const keyLower = key.toLowerCase();
-    const isSensitive = SENSITIVE_KEYS.some(sensitiveKey =>
-      keyLower.includes(sensitiveKey)
-    );
+    const isSensitive = SENSITIVE_FIELDS.includes(key as typeof SENSITIVE_FIELDS[number]);
 
     if (isSensitive) {
       result[key] = '[REDACTED]';
@@ -65,19 +49,24 @@ describe('Sensitive Data Redaction', () => {
     expect(output).toEqual({ apiKey: '[REDACTED]', data: 'public' });
   });
 
-  test('redacts multiple sensitive fields', () => {
+  test('redacts apiUrl field', () => {
+    const input = { apiUrl: 'https://api.example.com/secret', data: 'public' };
+    const output = redactSensitive(input);
+
+    expect(output).toEqual({ apiUrl: '[REDACTED]', data: 'public' });
+  });
+
+  test('redacts both apiKey and apiUrl fields', () => {
     const input = {
       apiKey: 'secret-key',
-      apiToken: 'secret-token',
-      password: 'secret-pass',
+      apiUrl: 'https://api.example.com',
       username: 'john',
     };
     const output = redactSensitive(input);
 
     expect(output).toEqual({
       apiKey: '[REDACTED]',
-      apiToken: '[REDACTED]',
-      password: '[REDACTED]',
+      apiUrl: '[REDACTED]',
       username: 'john',
     });
   });
@@ -86,9 +75,10 @@ describe('Sensitive Data Redaction', () => {
     const input = {
       user: {
         name: 'john',
-        credentials: {
+        config: {
           apiKey: 'secret-key',
           apiUrl: 'https://api.example.com',
+          otherField: 'public-value',
         },
       },
     };
@@ -97,7 +87,11 @@ describe('Sensitive Data Redaction', () => {
     expect(output).toEqual({
       user: {
         name: 'john',
-        credentials: '[REDACTED]',
+        config: {
+          apiKey: '[REDACTED]',
+          apiUrl: '[REDACTED]',
+          otherField: 'public-value',
+        },
       },
     });
   });
@@ -108,7 +102,7 @@ describe('Sensitive Data Redaction', () => {
         apiKey: 'secret-key',
         apiUrl: 'https://api.example.com',
         nested: {
-          password: 'secret-pass',
+          apiKey: 'nested-secret',
           publicField: 'public-value',
         },
       },
@@ -118,9 +112,9 @@ describe('Sensitive Data Redaction', () => {
     expect(output).toEqual({
       config: {
         apiKey: '[REDACTED]',
-        apiUrl: 'https://api.example.com',
+        apiUrl: '[REDACTED]',
         nested: {
-          password: '[REDACTED]',
+          apiKey: '[REDACTED]',
           publicField: 'public-value',
         },
       },
@@ -144,38 +138,44 @@ describe('Sensitive Data Redaction', () => {
     });
   });
 
-  test('handles case-insensitive field names', () => {
+  test('only redacts exact field names (case-sensitive)', () => {
     const input = {
       apiKey: 'secret-1',
-      api_key: 'secret-2',
-      API_KEY: 'secret-3',
-      ApiKey: 'secret-4',
+      api_key: 'not-redacted',
+      API_KEY: 'not-redacted',
+      ApiKey: 'not-redacted',
+      apiUrl: 'secret-url',
+      api_url: 'not-redacted',
+      API_URL: 'not-redacted',
     };
     const output = redactSensitive(input);
 
     expect(output).toEqual({
       apiKey: '[REDACTED]',
-      api_key: '[REDACTED]',
-      API_KEY: '[REDACTED]',
-      ApiKey: '[REDACTED]',
+      api_key: 'not-redacted',
+      API_KEY: 'not-redacted',
+      ApiKey: 'not-redacted',
+      apiUrl: '[REDACTED]',
+      api_url: 'not-redacted',
+      API_URL: 'not-redacted',
     });
   });
 
-  test('redacts various sensitive patterns', () => {
+  test('does not redact fields with similar names', () => {
     const input = {
       apiKey: 'should-redact',
-      apiToken: 'should-redact',
-      accessToken: 'should-redact',
-      secret: 'should-redact',
-      secretKey: 'should-redact',
-      password: 'should-redact',
-      credentials: 'should-redact',
-      authorization: 'should-redact',
-      bearer: 'should-redact',
-      privateKey: 'should-redact',
+      apiUrl: 'should-redact',
       // These should NOT be redacted
-      apiUrl: 'https://api.example.com',
-      publicKey: 'public-key-xyz',
+      apiToken: 'not-redacted',
+      accessToken: 'not-redacted',
+      secret: 'not-redacted',
+      secretKey: 'not-redacted',
+      password: 'not-redacted',
+      credentials: 'not-redacted',
+      authorization: 'not-redacted',
+      bearer: 'not-redacted',
+      privateKey: 'not-redacted',
+      publicKey: 'not-redacted',
       userName: 'testuser',
       userEmail: 'test@example.com',
     };
@@ -183,17 +183,17 @@ describe('Sensitive Data Redaction', () => {
 
     expect(output).toEqual({
       apiKey: '[REDACTED]',
-      apiToken: '[REDACTED]',
-      accessToken: '[REDACTED]',
-      secret: '[REDACTED]',
-      secretKey: '[REDACTED]',
-      password: '[REDACTED]',
-      credentials: '[REDACTED]',
-      authorization: '[REDACTED]',
-      bearer: '[REDACTED]',
-      privateKey: '[REDACTED]',
-      apiUrl: 'https://api.example.com',
-      publicKey: 'public-key-xyz',
+      apiUrl: '[REDACTED]',
+      apiToken: 'not-redacted',
+      accessToken: 'not-redacted',
+      secret: 'not-redacted',
+      secretKey: 'not-redacted',
+      password: 'not-redacted',
+      credentials: 'not-redacted',
+      authorization: 'not-redacted',
+      bearer: 'not-redacted',
+      privateKey: 'not-redacted',
+      publicKey: 'not-redacted',
       userName: 'testuser',
       userEmail: 'test@example.com',
     });
@@ -235,14 +235,14 @@ describe('Sensitive Data Redaction', () => {
       level1: {
         apiKey: 'secret-1',
         level2: {
-          password: 'secret-2',
+          apiUrl: 'secret-url',
           level3: {
-            token: 'secret-3',
+            apiKey: 'secret-3',
             publicData: 'public',
           },
         },
         publicArray: [
-          { id: 1, secret: 'secret-4', name: 'item1' },
+          { id: 1, apiKey: 'secret-4', name: 'item1' },
         ],
       },
     };
@@ -252,37 +252,36 @@ describe('Sensitive Data Redaction', () => {
       level1: {
         apiKey: '[REDACTED]',
         level2: {
-          password: '[REDACTED]',
+          apiUrl: '[REDACTED]',
           level3: {
-            token: '[REDACTED]',
+            apiKey: '[REDACTED]',
             publicData: 'public',
           },
         },
         publicArray: [
-          { id: 1, secret: '[REDACTED]', name: 'item1' },
+          { id: 1, apiKey: '[REDACTED]', name: 'item1' },
         ],
       },
     });
   });
 
-  test('preserves non-sensitive fields with similar names', () => {
+  test('preserves non-sensitive fields with similar substrings', () => {
     const input = {
-      apiUrl: 'https://api.example.com',
+      apiEndpoint: 'https://api.example.com',
       publicKey: 'public-key-xyz',
       tokenExpiry: 3600,
       secretariat: 'office-name',
+      passwordPolicy: 'strong',
     };
     const output = redactSensitive(input);
 
-    // apiUrl should NOT be redacted (doesn't contain sensitive keywords)
-    // publicKey should NOT be redacted (not in sensitive list)
-    // tokenExpiry should be redacted (contains 'token')
-    // secretariat should be redacted (contains 'secret')
+    // None of these should be redacted as they are not exact matches
     expect(output).toEqual({
-      apiUrl: 'https://api.example.com',
+      apiEndpoint: 'https://api.example.com',
       publicKey: 'public-key-xyz',
-      tokenExpiry: '[REDACTED]',
-      secretariat: '[REDACTED]',
+      tokenExpiry: 3600,
+      secretariat: 'office-name',
+      passwordPolicy: 'strong',
     });
   });
 });

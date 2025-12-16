@@ -119,22 +119,10 @@ export async function withGeneration<T>(
 }
 
 /**
- * Sensitive field patterns that should be redacted from observability data
+ * Exact field names that should be redacted from observability data
+ * Only these exact field names (case-sensitive) are redacted
  */
-const SENSITIVE_KEYS = [
-  'apikey',
-  'apitoken',
-  'secret',
-  'password',
-  'credentials',
-  'accesstoken',
-  'token',
-  'auth',
-  'authorization',
-  'bearer',
-  'privatekey',
-  'secretkey',
-] as const;
+const SENSITIVE_FIELDS = ['apiKey', 'apiUrl'] as const;
 
 /**
  * Recursively redact sensitive fields from an object
@@ -156,10 +144,7 @@ function redactSensitive(obj: unknown): unknown {
   // Handle objects
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
-    const keyLower = key.toLowerCase();
-    const isSensitive = SENSITIVE_KEYS.some(sensitiveKey =>
-      keyLower.includes(sensitiveKey)
-    );
+    const isSensitive = SENSITIVE_FIELDS.includes(key as typeof SENSITIVE_FIELDS[number]);
 
     if (isSensitive) {
       result[key] = '[REDACTED]';
