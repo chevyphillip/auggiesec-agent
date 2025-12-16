@@ -17,7 +17,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import type { AugmentCredentials, Config } from '../config';
 import type { OwaspCategory, SecurityFinding } from '../graph/state';
 import { tracer } from '../instrumentation';
-import { withAgent } from '../observability';
+import { withAgent, withTool } from '../observability';
 import { getOwaspPrompt } from './langfuse-prompts';
 import {
     clearFindings
@@ -161,17 +161,36 @@ export async function analyzeWithAuggie(
               `[auggie] Analyzing ${repoPath} for ${category} with ${model}`
             );
 
-            // Initialize Auggie with the repository and credentials
-            client = await Auggie.create({
-              workspaceRoot: repoPath,
-              model,
-              // Pass credentials from validated config
-              apiKey: credentials.apiKey,
-              apiUrl: credentials.apiUrl,
-              // tools: {
-              //   report_vulnerability: reportVulnerabilityTool,
-              // },
-            });
+	            // Initialize Auggie with the repository and credentials
+	            client = await withTool(
+	              'tool.auggie_create',
+	              async () =>
+	                Auggie.create({
+	                  workspaceRoot: repoPath,
+	                  model,
+	                  // Pass credentials from validated config
+	                  apiKey: credentials.apiKey,
+	                  apiUrl: credentials.apiUrl,
+	                  // tools: {
+	                  //   report_vulnerability: reportVulnerabilityTool,
+	                  // },
+	                }),
+	              {
+	                input: {
+	                  repoPath,
+	                  model,
+	                },
+	                scanContext: {
+	                  scanId,
+	                  owaspCategory: category,
+	                  repoPath,
+	                },
+	                metadata: {
+	                  toolName: 'auggie_create',
+	                  toolType: 'auggie_sdk',
+	                },
+	              }
+	            );
 
             // Build the analysis prompt - ask for structured JSON output
             const analysisPrompt = `${prompt.text}
@@ -197,8 +216,28 @@ For EACH vulnerability you find, include it in a JSON array with this structure:
 Be thorough but precise. Only report actual vulnerabilities with evidence.
 Return ONLY the JSON array, no other text.`;
 
-            // Let Auggie orchestrate the analysis
-            const response = await client.prompt(analysisPrompt);
+	            // Let Auggie orchestrate the analysis via a tool observation
+	            const response = await withTool(
+	              'tool.auggie_prompt',
+	              async () => client!.prompt(analysisPrompt),
+	              {
+	                input: {
+	                  category,
+	                  model,
+	                  // Avoid sending the full prompt body in metadata
+	                  promptPreview: analysisPrompt.slice(0, 500),
+	                },
+	                scanContext: {
+	                  scanId,
+	                  owaspCategory: category,
+	                  repoPath,
+	                },
+	                metadata: {
+	                  toolName: 'auggie_prompt',
+	                  toolType: 'auggie_sdk',
+	                },
+	              }
+	            );
 
             console.log(`[auggie] Analysis complete. Response length: ${response.length}`);
 
