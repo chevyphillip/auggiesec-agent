@@ -11,7 +11,7 @@ AI-powered security scanner that analyzes codebases for OWASP Top 10 2021 vulner
 │  input → enumerate → analyze → aggregate → output               │
 │            │            │                                        │
 │            ▼            ▼                                        │
-│      File Discovery   Claude LLM + Auggie SDK                   │
+│      File Discovery   Auggie SDK + Augment SDK                  │
 │                       (OWASP prompts from Langfuse)             │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -21,22 +21,22 @@ AI-powered security scanner that analyzes codebases for OWASP Top 10 2021 vulner
 ```
 
 1. **Enumerate** - Discovers analysis targets (routes, controllers, configs)
-2. **Analyze** - Claude LLM evaluates code against OWASP categories using prompts from Langfuse
+2. **Analyze** - Auggie SDK evaluates code against OWASP categories using prompts from Langfuse
 3. **Aggregate** - Consolidates findings with severity and remediation guidance
 
 ## Requirements
 
 - [Bun](https://bun.sh) runtime
 - [Langfuse](https://langfuse.com) account (for observability + prompt management)
-- [Anthropic](https://anthropic.com) API key (Claude)
-- [Augment](https://augmentcode.com) account (optional, for enhanced code analysis)
+- [Augment](https://augmentcode.com) account (required, for enhanced code analysis)
+- [Auggie CLI](https://github.com/augmentcode/auggie-cli) installed and authenticated (for Augment SDK)
 
 ## Setup
 
 ```bash
 bun install
 cp .env.example .env
-# Fill in your API keys
+# Fill in your credentials
 ```
 
 ### Environment Variables
@@ -45,9 +45,22 @@ cp .env.example .env
 |----------|----------|-------------|
 | `LANGFUSE_PUBLIC_KEY` | Yes | Langfuse public key (`pk-lf-...`) |
 | `LANGFUSE_SECRET_KEY` | Yes | Langfuse secret key (`sk-lf-...`) |
-| `ANTHROPIC_API_KEY` | Yes | Anthropic API key (`sk-ant-...`) |
-| `AUGMENT_API_KEY` | No | Augment API key (`aug_...`) for enhanced analysis |
+| `LANGFUSE_BASE_URL` | No | Langfuse host URL (for US region or self-hosted) |
+| `AUGMENT_SESSION_AUTH` | Yes* | Full JSON from `auggie token print` (recommended) |
+| `AUGMENT_API_TOKEN` | Yes* | Augment API token (alternative to SESSION_AUTH) |
+| `AUGMENT_API_URL` | Yes* | Augment API URL (required with API_TOKEN) |
 | `WORKSPACE_ROOT` | No | Target repo path (default: `./nodejs-goof`) |
+
+*One of `AUGMENT_SESSION_AUTH` or (`AUGMENT_API_TOKEN` + `AUGMENT_API_URL`) is required.
+
+**Getting Augment Credentials:**
+```bash
+# Install Auggie CLI and authenticate
+auggie token print  # Copy the full JSON output
+
+# Set as environment variable
+export AUGMENT_SESSION_AUTH='{"accessToken":"...","tenantURL":"..."}'
+```
 
 ## Usage
 
@@ -99,6 +112,8 @@ bun run type-check # TypeScript validation
   - Security hardening with excludedTools
   - Performance benchmarks and best practices
 
+- **[Video Demonstration Narrative](docs/VIDEO_NARRATIVE.md)** - Script and talking points for demo videos
+
 - **[Product Requirements Document](docs/PRD.md)** - Original PRD with implementation status
 
 ## Features
@@ -124,5 +139,4 @@ bun run type-check # TypeScript validation
 
 - **OWASP Top 10 2021** coverage for all 10 categories
 - **LangGraph workflow**: 5-node state machine (input → enumerate → analyze → aggregate → output)
-- **Claude LLM integration**: Anthropic's Claude for vulnerability analysis
 - **Structured findings**: Category, severity, evidence, explanation, remediation

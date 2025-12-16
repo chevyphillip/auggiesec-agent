@@ -6,9 +6,20 @@
       "Bash(LANGFUSE_PUBLIC_KEY=pk-lf-test LANGFUSE_SECRET_KEY=sk-lf-test bun test:*)",
       "Bash(bun run type-check:*)",
       "Bash(git checkout:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "mcp__MCP_DOCKER__mcp-find",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "memory",
+    "DeepGraph Next.js MCP",
+    "DeepGraph React MCP",
+    "DeepGraph TypeScript MCP"
+  ]
 }
