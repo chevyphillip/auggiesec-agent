@@ -122,48 +122,64 @@ export async function createDirectContext(
   config: DirectContextConfig,
   stateFilePath?: string
 ): Promise<DirectContext> {
-  return tracer.startActiveSpan('direct_context.create', async (span) => {
-    try {
-      const credentials = getDirectContextCredentials(config);
-      const isDebug = config.nodeEnv === 'development';
-      let context: DirectContext;
+	  return withTool(
+	    'tool.direct_context_create',
+	    async () =>
+	      tracer.startActiveSpan('direct_context.create', async (span) => {
+	        try {
+	          const credentials = getDirectContextCredentials(config);
+	          const isDebug = config.nodeEnv === 'development';
+	          let context: DirectContext;
 
-      if (stateFilePath) {
-        console.log(`[direct-context] Importing state from ${stateFilePath}`);
-        span.setAttribute('state.import', true);
-        span.setAttribute('state.file', stateFilePath);
+	          if (stateFilePath) {
+	            console.log(`[direct-context] Importing state from ${stateFilePath}`);
+	            span.setAttribute('state.import', true);
+	            span.setAttribute('state.file', stateFilePath);
 
-        context = await DirectContext.importFromFile(stateFilePath, {
-          ...credentials,
-          debug: isDebug,
-        });
+	            context = await DirectContext.importFromFile(stateFilePath, {
+	              ...credentials,
+	              debug: isDebug,
+	            });
 
-        const indexedPaths = context.getIndexedPaths();
-        console.log(`[direct-context] Restored ${indexedPaths.length} indexed files`);
-        span.setAttribute('state.indexed_files', indexedPaths.length);
-      } else {
-        console.log('[direct-context] Creating new context');
-        span.setAttribute('state.import', false);
+	            const indexedPaths = context.getIndexedPaths();
+	            console.log(
+	              `[direct-context] Restored ${indexedPaths.length} indexed files`
+	            );
+	            span.setAttribute('state.indexed_files', indexedPaths.length);
+	          } else {
+	            console.log('[direct-context] Creating new context');
+	            span.setAttribute('state.import', false);
 
-        context = await DirectContext.create({
-          ...credentials,
-          debug: isDebug,
-        });
-      }
+	            context = await DirectContext.create({
+	              ...credentials,
+	              debug: isDebug,
+	            });
+	          }
 
-      span.setStatus({ code: SpanStatusCode.OK });
-      return context;
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
+	          span.setStatus({ code: SpanStatusCode.OK });
+	          return context;
+	        } catch (error) {
+	          span.setStatus({
+	            code: SpanStatusCode.ERROR,
+	            message: error instanceof Error ? error.message : String(error),
+	          });
+	          span.recordException(error as Error);
+	          throw error;
+	        } finally {
+	          span.end();
+	        }
+	      }),
+	    {
+	      input: {
+	        hasStateFile: Boolean(stateFilePath),
+	        stateFilePath,
+	      },
+	      metadata: {
+	        toolName: 'direct_context_create',
+	        operation: stateFilePath ? 'import_from_file' : 'create',
+	      },
+	    }
+	  );
 }
 
 /**
