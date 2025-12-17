@@ -101,21 +101,6 @@ bun test           # Run all tests
 bun run type-check # TypeScript validation
 ```
 
-## Documentation
-
-- **[Augment SDK Integration Guide](docs/AUGMENT_SDK_INTEGRATION.md)** - Complete guide to the Augment Context Engine SDK integration
-  - 4-phase modernization (Foundation, Performance, Accuracy, Polish)
-  - DirectContext for persistent indexing (97% faster)
-  - Targeted search for OWASP vulnerabilities (40% fewer false positives)
-  - Session callbacks for real-time progress tracking
-  - Request cancellation with timeout protection
-  - Security hardening with excludedTools
-  - Performance benchmarks and best practices
-
-- **[Video Demonstration Narrative](docs/VIDEO_NARRATIVE.md)** - Script and talking points for demo videos
-
-- **[Product Requirements Document](docs/PRD.md)** - Original PRD with implementation status
-
 ## Features
 
 ### Augment SDK Integration
