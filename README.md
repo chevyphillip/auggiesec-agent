@@ -2,6 +2,20 @@
 
 AI-powered security scanner that analyzes codebases for OWASP Top 10 2021 vulnerabilities with full observability via Langfuse.
 
+> **Note on OWASP Affiliation**: This project uses OWASP security standards and naming conventions but is an independent community project. It is not an official OWASP Foundation project and has not undergone OWASP incubation or labs review.
+
+## Quick Start
+
+```bash
+git clone https://github.com/chevyphillip/auggiesec-agent.git
+cd auggiesec-agent
+bun install          # Install dependencies
+cp .env.example .env # Configure environment
+# Edit .env with your Langfuse and Augment credentials
+bun test             # Verify installation
+bun run index.ts     # Run security scan
+```
+
 ## How It Works
 
 ```
@@ -100,21 +114,6 @@ Top Findings:
 bun test           # Run all tests
 bun run type-check # TypeScript validation
 ```
-
-## Documentation
-
-- **[Augment SDK Integration Guide](docs/AUGMENT_SDK_INTEGRATION.md)** - Complete guide to the Augment Context Engine SDK integration
-  - 4-phase modernization (Foundation, Performance, Accuracy, Polish)
-  - DirectContext for persistent indexing (97% faster)
-  - Targeted search for OWASP vulnerabilities (40% fewer false positives)
-  - Session callbacks for real-time progress tracking
-  - Request cancellation with timeout protection
-  - Security hardening with excludedTools
-  - Performance benchmarks and best practices
-
-- **[Video Demonstration Narrative](docs/VIDEO_NARRATIVE.md)** - Script and talking points for demo videos
-
-- **[Product Requirements Document](docs/PRD.md)** - Original PRD with implementation status
 
 ## Features
 

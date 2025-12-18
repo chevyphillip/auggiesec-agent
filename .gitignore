@@ -33,4 +33,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
+# Test target repository
 nodejs-goof/
+
+# IDE and AI tool configs (user-specific)
+.claude/
+.qoder/
